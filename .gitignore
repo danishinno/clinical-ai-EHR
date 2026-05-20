@@ -10,8 +10,6 @@ __pycache__/
 *$py.class
 
 # Databases & local stores
-*.db
-clinical_data.db
 chroma_db/
 
 # System / OS files
