@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Sync</title>
+    <meta name="description" content="AI dictation scribe for structured clinical notes">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Marked.js for parsing markdown in AI responses -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+
+<body>
+    <div class="container">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img src="logo.png" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: white;">
+                <div>
+                    <h1 style="margin-bottom: 0;">Health Sync</h1>
+                    <p class="subtext" style="margin-top: 0;">Welcome, Dr. <span id="dr-name-display"></span></p>
+                </div>
+            </div>
+            <div style="position: relative; display: inline-block;">
+                <button id="menu-dots-btn" class="btn btn-secondary" style="font-size: 1.2rem; padding: 0.2rem 0.8rem; line-height: 1; border-radius: 20px;">⋯</button>
+                <div id="header-dropdown" class="dropdown-content hidden" style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 200px; box-shadow: var(--shadow); border-radius: var(--radius-sm); border: 1px solid var(--border-color); z-index: 10;">
+                    <button onclick="window.location.href='profile.html'" class="dropdown-item" style="border-bottom: 1px solid var(--border-color);">⚙️ Profile Settings</button>
+                    <button id="history-btn" class="dropdown-item" style="border-bottom: 1px solid var(--border-color);">🩺 Patient History</button>
+                    <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);">🚪 Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="layout">
+            <section class="panel live-dictation">
+                <div class="panel-header">
+                    <h2>Live Dictation</h2>
+                    <div class="controls">
+                        <button id="start-btn" class="btn btn-primary">
+                            <span class="icon">🎙️</span> Start Live Dictation
+                        </button>
+                        <button id="finish-btn" class="btn btn-secondary" disabled>
+                            Finish Consultation
+                        </button>
+                    </div>
+                </div>
+                <div class="transcript-area">
+                    <p id="transcript-placeholder" class="placeholder-text">Click "Start Live Dictation" and begin
+                        speaking...</p>
+                    <div id="transcript-content"></div>
+                </div>
+            </section>
+
+            <section class="panel structured-notes">
+                <div class="panel-header">
+                    <h2>Structured Clinical Notes</h2>
+                </div>
+                <div class="notes-content" id="notes-content">
+                    <div id="loading-state" class="hidden">
+                        <div class="spinner"></div> Extracting data...
+                    </div>
+
+                    <div id="extracted-data" class="data-grid">
+                        <div class="data-field">
+                            <label>Name</label>
+                            <div class="value editable-field" id="val-name" contenteditable="true">--</div>
+                        </div>
+                        <div class="data-field">
+                            <label>Age</label>
+                            <div class="value editable-field" id="val-age" contenteditable="true">--</div>
+                        </div>
+                        <div class="data-field">
+                            <label>Subjective (S)</label>
+                            <div class="value editable-field" id="val-subjective" contenteditable="true">--</div>
+                        </div>
+                        <div class="data-field">
+                            <label>Objective (O)</label>
+                            <div class="value editable-field" id="val-objective" contenteditable="true">--</div>
+                        </div>
+                        <div class="data-field">
+                            <label>Assessment (A)</label>
+                            <div class="value editable-field" id="val-assessment" contenteditable="true">--</div>
+                        </div>
+                        <div class="data-field">
+                            <label>Plan (P)</label>
+                            <div class="value editable-field" id="val-plan" contenteditable="true">--</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; text-align: right;">
+                        <button id="save-notes-btn" class="btn btn-primary hidden">
+                            <span class="icon">💾</span> Save Changes
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Floating Action Button for CDS -->
+        <div id="cds-fab" class="cds-fab" title="Open Clinical Brain">
+            <img src="logo.png" alt="Clinical AI Logo">
+        </div>
+
+        <div id="cds-panel" class="cds-panel panel glass-panel hidden">
+            <div class="panel-header">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <h2>🧠 Clinical Brain (CDS)</h2>
+                    <div id="cds-loading" class="hidden glow-loading">
+                        <span class="icon pulsing-brain">🧠</span> Thinking...
+                    </div>
+                </div>
+                <button id="close-cds-btn" class="btn btn-secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;" aria-label="Close">✕</button>
+            </div>
+            
+            <div class="smart-suggestions">
+                <button class="smart-btn" data-query="Check vs. Malaysian CPG">Check vs. Malaysian CPG</button>
+                <button class="smart-btn" data-query="Summarize History">Summarize History</button>
+                <button class="smart-btn" data-query="Recommend Treatment">Recommend Treatment</button>
+            </div>
+
+            <div class="chat-area" id="chat-area">
+                <div class="chat-placeholder" id="chat-placeholder">
+                    <p>Ask a clinical question about the patient or use a Smart Suggestion.</p>
+                </div>
+                <!-- Chat bubbles will go here -->
+            </div>
+
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Ask Clinical Brain..." autocomplete="off">
+                <button id="chat-send-btn" class="btn btn-primary">
+                    <span class="icon">➤</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+        <div class="panel glass-panel" style="width: 80%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
+            <div class="panel-header">
+                <h2>Patient History</h2>
+                <button id="close-modal-btn" class="btn btn-secondary">Close</button>
+            </div>
+            <div id="history-list" style="padding: 1.5rem; overflow-y: auto; flex-grow: 1;">
+                <!-- History loads here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Medical Certificate Modal -->
+    <div id="mc-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 1001;">
+        <div class="panel glass-panel" style="width: 90%; max-width: 500px; display: flex; flex-direction: column; padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); box-shadow: var(--shadow);">
+            <div class="panel-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.5rem; color: var(--primary-color);">📋 Issue Medical Certificate</h2>
+                <button id="close-mc-btn" class="btn btn-secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 1.2rem;">
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient Name</label>
+                    <input type="text" id="mc-patient-name" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: rgba(0,0,0,0.02);" readonly>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <div style="flex: 1;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Start Date</label>
+                        <input type="date" id="mc-start-date" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">End Date</label>
+                        <input type="date" id="mc-end-date" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Reason for Leave</label>
+                    <input type="text" id="mc-reason" placeholder="e.g. Fever, Upper Respiratory Tract Infection" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                </div>
+                <button id="download-mc-btn" class="btn btn-primary" style="width: 100%; padding: 0.8rem; margin-top: 1rem; font-weight: 600;">
+                    📥 Download MC PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="logo_base64.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

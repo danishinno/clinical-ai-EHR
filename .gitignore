@@ -1,0 +1,25 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases & local stores
+*.db
+clinical_data.db
+chroma_db/
+
+# System / OS files
+.DS_Store
+Thumbs.db
+
+# Dynamic text dumps / scratch logs
+*_output.txt
+*_dump.txt
+patients_dump.txt
+chroma_output.txt

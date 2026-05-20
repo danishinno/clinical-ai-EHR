@@ -1,0 +1,632 @@
+const userId = localStorage.getItem('user_id');
+if (!userId) {
+    window.location.href = 'login.html';
+}
+
+document.getElementById('dr-name-display').textContent = localStorage.getItem('first_name') || localStorage.getItem('username') || '';
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+    localStorage.clear();
+    window.location.href = 'login.html';
+});
+
+const menuDotsBtn = document.getElementById('menu-dots-btn');
+const headerDropdown = document.getElementById('header-dropdown');
+
+menuDotsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    headerDropdown.classList.toggle('show');
+    headerDropdown.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+    if (!headerDropdown.contains(e.target) && !menuDotsBtn.contains(e.target)) {
+        headerDropdown.classList.remove('show');
+        headerDropdown.classList.add('hidden');
+    }
+});
+
+const startBtn = document.getElementById('start-btn');
+const finishBtn = document.getElementById('finish-btn');
+const transcriptPlaceholder = document.getElementById('transcript-placeholder');
+const transcriptContent = document.getElementById('transcript-content');
+const loadingState = document.getElementById('loading-state');
+const dataGrid = document.getElementById('extracted-data');
+
+const valName = document.getElementById('val-name');
+const valAge = document.getElementById('val-age');
+const valSubjective = document.getElementById('val-subjective');
+const valObjective = document.getElementById('val-objective');
+const valAssessment = document.getElementById('val-assessment');
+const valPlan = document.getElementById('val-plan');
+
+let socket;
+let isRecording = false;
+let currentEncounterId = null;
+let currentDocId = null;
+let globalStream = null;
+let cdsHistory = [];
+let loadedEncounters = [];
+
+async function getGlobalStream() {
+    if (!globalStream) {
+        globalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    return globalStream;
+}
+
+startBtn.addEventListener('click', async () => {
+    if (isRecording) return;
+
+    try {
+        const stream = await getGlobalStream();
+        socket = new WebSocket('ws://127.0.0.1:8000/live-transcribe');
+
+        socket.onopen = () => {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            const source = audioContext.createMediaStreamSource(stream);
+            const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+            source.connect(processor);
+            processor.connect(audioContext.destination);
+
+            processor.onaudioprocess = (e) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    const float32Array = e.inputBuffer.getChannelData(0);
+                    socket.send(float32Array.buffer);
+                }
+            };
+
+            window.localProcessor = processor;
+            window.localAudioContext = audioContext;
+
+            isRecording = true;
+            startBtn.classList.add('recording');
+            startBtn.innerHTML = '<span class="icon">🔴</span> Recording...';
+            finishBtn.disabled = false;
+            transcriptPlaceholder.classList.add('hidden');
+        };
+
+        socket.onmessage = (event) => {
+            const text = event.data;
+            if (text) {
+                const currentText = transcriptContent.innerText;
+                const needsSpace = currentText.length > 0 && !currentText.endsWith(' ');
+                const span = document.createElement('span');
+                span.textContent = (needsSpace ? ' ' : '') + text;
+                transcriptContent.appendChild(span);
+                transcriptContent.parentElement.scrollTop = transcriptContent.parentElement.scrollHeight;
+            }
+        };
+
+        socket.onerror = () => { stopRecordingUI(); };
+    } catch (err) {
+        alert('Microphone access hardware capture fault.');
+    }
+});
+
+finishBtn.addEventListener('click', async () => {
+    if (!isRecording) return;
+
+    if (window.localProcessor) window.localProcessor.disconnect();
+    if (window.localAudioContext) window.localAudioContext.close();
+    if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+
+    stopRecordingUI();
+    const fullTranscript = transcriptContent.innerText.trim();
+    if (!fullTranscript) return;
+
+    dataGrid.classList.add('hidden');
+    loadingState.classList.remove('hidden');
+
+    try {
+        const response = await fetch('http://127.0.0.1:8000/process-dictation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doctor_id: userId, transcript: fullTranscript })
+        });
+
+        const data = await response.json();
+        currentEncounterId = data._encounter_id;
+        currentDocId = data._doc_id;
+
+        valName.textContent = window.formatData(data.name);
+        valAge.textContent = window.formatData(data.age);
+        valSubjective.textContent = window.formatData(data.subjective);
+        valObjective.textContent = window.formatData(data.objective);
+        valAssessment.textContent = window.formatData(data.assessment);
+        valPlan.textContent = window.formatData(data.plan);
+
+    } catch (error) {
+        alert('Failed to extract unstructured stream patterns.');
+    } finally {
+        loadingState.classList.add('hidden');
+        dataGrid.classList.remove('hidden');
+        if (currentEncounterId) {
+            document.getElementById('save-notes-btn').classList.remove('hidden');
+        }
+    }
+});
+
+function stopRecordingUI() {
+    isRecording = false;
+    startBtn.classList.remove('recording');
+    startBtn.innerHTML = '<span class="icon">🎙️</span> Start Live Dictation';
+    finishBtn.disabled = true;
+}
+
+const saveNotesBtn = document.getElementById('save-notes-btn');
+if (saveNotesBtn) {
+    saveNotesBtn.addEventListener('click', async () => {
+        if (!currentEncounterId) return;
+
+        const updatedNotes = {
+            name: valName.textContent,
+            age: valAge.textContent,
+            subjective: valSubjective.textContent,
+            objective: valObjective.textContent,
+            assessment: valAssessment.textContent,
+            plan: valPlan.textContent
+        };
+
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/encounter/${currentEncounterId}/notes`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    encounter_id: currentEncounterId,
+                    doc_id: currentDocId,
+                    updated_notes: updatedNotes,
+                    patient_name: updatedNotes.name
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
+                cdsHistory = [];
+                setTimeout(() => {
+                    saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Changes';
+                }, 2000);
+            }
+        } catch (err) {
+            alert('Failed to execute update sequence pipeline.');
+        }
+    });
+}
+
+const chatArea = document.getElementById('chat-area');
+const chatInput = document.getElementById('chat-input');
+const chatSendBtn = document.getElementById('chat-send-btn');
+const cdsLoading = document.getElementById('cds-loading');
+const cdsFab = document.getElementById('cds-fab');
+const cdsPanel = document.getElementById('cds-panel');
+const closeCdsBtn = document.getElementById('close-cds-btn');
+
+cdsFab.addEventListener('click', () => { cdsPanel.classList.toggle('hidden'); });
+closeCdsBtn.addEventListener('click', () => { cdsHistory = []; cdsPanel.classList.add('hidden'); });
+
+async function askClinicalBrain(question) {
+    if (!question.trim()) return;
+
+    addChatBubble(question, true);
+    chatInput.value = '';
+    cdsLoading.classList.remove('hidden');
+
+    try {
+        const response = await fetch('http://127.0.0.1:8000/ask-guidelines', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_question: question,
+                transcript: transcriptContent.innerText.trim(),
+                doctor_id: parseInt(userId),
+                history: cdsHistory
+            })
+        });
+
+        const data = await response.json();
+        let aiMarkdown = data.answer || 'No response.';
+
+        cdsHistory.push({ role: 'user', content: question });
+        cdsHistory.push({ role: 'assistant', content: aiMarkdown });
+
+        if (typeof marked !== 'undefined') aiMarkdown = marked.parse(aiMarkdown);
+        addChatBubble(aiMarkdown, false, true);
+
+    } catch (err) {
+        addChatBubble('❌ CDS server pipeline fallback connection error.', false);
+    } finally {
+        cdsLoading.classList.add('hidden');
+    }
+}
+
+chatSendBtn.addEventListener('click', () => askClinicalBrain(chatInput.value));
+chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') askClinicalBrain(chatInput.value); });
+
+// Smart Suggestion Buttons Event Listeners
+document.querySelectorAll('.smart-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const query = btn.getAttribute('data-query');
+        if (query) {
+            askClinicalBrain(query);
+        }
+    });
+});
+
+function addChatBubble(text, isUser = false, isHtml = false) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${isUser ? 'user-bubble' : 'ai-bubble'}`;
+    if (isHtml) {
+        bubble.innerHTML = text;
+        if (!isUser) {
+            const btn = document.createElement('button');
+            btn.className = 'copy-ehr-btn';
+            btn.innerHTML = '📋 Copy';
+            btn.onclick = () => { navigator.clipboard.writeText(bubble.innerText); };
+            bubble.appendChild(btn);
+        }
+    } else {
+        bubble.textContent = text;
+    }
+    chatArea.appendChild(bubble);
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+const historyBtn = document.getElementById('history-btn');
+const historyModal = document.getElementById('history-modal');
+const closeModalBtn = document.getElementById('close-modal-btn');
+const historyList = document.getElementById('history-list');
+
+historyBtn.addEventListener('click', async () => {
+    historyModal.classList.remove('hidden');
+    historyList.innerHTML = '<div class="spinner"></div> Loading dynamic encounters logs...';
+
+    try {
+        const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/patients`);
+        const data = await response.json();
+        loadedEncounters = data.patients || [];
+        historyList.innerHTML = '';
+
+        if (!data.patients || data.patients.length === 0) {
+            historyList.innerHTML = '<p>No historical clinical consult logs found.</p>';
+            return;
+        }
+
+        data.patients.forEach(p => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '1rem';
+            div.style.padding = '1rem';
+            div.style.background = '#f5f5f7';
+            div.style.borderRadius = '8px';
+
+            div.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                    <button id="title-btn-${p.encounter_id}" data-timestamp="${p.created_at}"
+                        style="background:none;border:none;color:var(--primary-color);font-weight:600;font-size:1rem;cursor:pointer;text-align:left;"
+                        onclick="toggleNotes('notes-${p.encounter_id}')">
+                        ▶ ${p.patient_name || 'Unknown Patient'} (${new Date(p.created_at).toLocaleString()})
+                    </button>
+                    <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
+                        <button onclick="generateCertificate(${p.encounter_id})" class="btn btn-secondary"
+                            style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
+                            📄 MC
+                        </button>
+                        <button onclick="toggleInlineEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
+                            style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
+                            ✏️ Edit Note
+                        </button>
+                    </div>
+                </div>
+                <div id="notes-${p.encounter_id}" style="display:none; margin-top:1rem; padding:0.5rem; background:rgba(255,255,255,0.8); border-radius:8px;">
+                    ${formatJsonStr(p.structured_notes_json)}
+                </div>
+            `;
+            historyList.appendChild(div);
+        });
+    } catch (err) {
+        historyList.innerHTML = '<p class="error">Failed to parse encounter timeline stream profiles.</p>';
+    }
+});
+
+closeModalBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+
+window.toggleInlineEdit = async function (encounterId, docId, btnElement) {
+    const notesContainer = document.getElementById(`notes-${encounterId}`);
+    if (!notesContainer) return;
+
+    const cells = notesContainer.querySelectorAll('.history-cell');
+
+    if (btnElement.textContent.includes('Save Note')) {
+        btnElement.innerHTML = 'Saving...';
+        btnElement.disabled = true;
+
+        const updatedNotes = {};
+        cells.forEach(cell => {
+            const key = cell.getAttribute('data-key');
+            updatedNotes[key] = cell.innerText;
+        });
+
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/encounter/${encounterId}/notes`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    encounter_id: encounterId,
+                    doc_id: docId || null,
+                    updated_notes: updatedNotes,
+                    patient_name: updatedNotes.name || 'Unknown Patient'
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                cells.forEach(cell => cell.removeAttribute('contenteditable'));
+                btnElement.innerHTML = '✏️ Edit Note';
+                btnElement.style.color = 'black';
+                btnElement.style.background = '#e5e5ea';
+                cdsHistory = [];
+
+                const titleBtn = document.getElementById('title-btn-' + encounterId);
+                if (titleBtn && updatedNotes.name) {
+                    const timestamp = titleBtn.getAttribute('data-timestamp');
+                    titleBtn.innerText = `▶ ${updatedNotes.name} (${new Date(timestamp).toLocaleString()})`;
+                }
+            }
+        } catch (err) {
+            alert('Error running update execution task context.');
+        } finally {
+            btnElement.disabled = false;
+        }
+    } else {
+        cells.forEach(cell => cell.setAttribute('contenteditable', 'true'));
+        btnElement.innerHTML = '💾 Save Note';
+        btnElement.style.color = 'white';
+        btnElement.style.background = '#28a745';
+        if (notesContainer.style.display === 'none') notesContainer.style.display = 'block';
+    }
+};
+
+// Medical Certificate issuance modal selectors
+const mcModal = document.getElementById('mc-modal');
+const closeMcBtn = document.getElementById('close-mc-btn');
+const mcPatientName = document.getElementById('mc-patient-name');
+const mcStartDate = document.getElementById('mc-start-date');
+const mcEndDate = document.getElementById('mc-end-date');
+const mcReason = document.getElementById('mc-reason');
+const downloadMcBtn = document.getElementById('download-mc-btn');
+
+let activeMcEncounterId = null;
+
+if (closeMcBtn) {
+    closeMcBtn.addEventListener('click', () => {
+        mcModal.classList.add('hidden');
+    });
+}
+
+window.generateCertificate = function (encounterId) {
+    const encounter = loadedEncounters.find(e => e.encounter_id === encounterId);
+    if (!encounter) {
+        alert("Encounter not found.");
+        return;
+    }
+    
+    activeMcEncounterId = encounterId;
+    
+    let notes = {};
+    try {
+        notes = JSON.parse(encounter.structured_notes_json);
+    } catch (e) {}
+
+    mcPatientName.value = encounter.patient_name || 'Unknown Patient';
+    
+    const today = new Date().toISOString().substring(0, 10);
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().substring(0, 10);
+    mcStartDate.value = today;
+    mcEndDate.value = tomorrow;
+    
+    mcReason.value = notes.assessment && notes.assessment !== '--' ? notes.assessment : 'Medical Illness';
+    
+    historyModal.classList.add('hidden');
+    mcModal.classList.remove('hidden');
+};
+
+if (downloadMcBtn) {
+    downloadMcBtn.addEventListener('click', async () => {
+        const encounter = loadedEncounters.find(e => e.encounter_id === activeMcEncounterId);
+        if (!encounter) {
+            alert("Active encounter not found.");
+            return;
+        }
+
+        const patientName = mcPatientName.value.trim();
+        const startDateVal = mcStartDate.value;
+        const endDateVal = mcEndDate.value;
+        const reasonVal = mcReason.value.trim() || 'Medical Illness';
+
+        if (!startDateVal || !endDateVal) {
+            alert("Please input valid dates.");
+            return;
+        }
+
+        const start = new Date(startDateVal);
+        const end = new Date(endDateVal);
+        
+        if (end < start) {
+            alert("End date cannot be prior to start date.");
+            return;
+        }
+
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        const formattedStart = start.toLocaleDateString('en-US', options);
+        const formattedEnd = end.toLocaleDateString('en-US', options);
+        const formattedVisit = new Date(encounter.created_at).toLocaleDateString('en-US', options);
+        
+        let notes = {};
+        try {
+            notes = JSON.parse(encounter.structured_notes_json);
+        } catch (e) {}
+
+        // Fetch Doctor Profile to display Registration/ID number & correct names
+        let doctorIdNumber = 'PR-88291-A';
+        let docFirstName = localStorage.getItem('first_name') || 'Mark';
+        let docLastName = localStorage.getItem('last_name') || 'Schrieber';
+        
+        try {
+            const drProfileResponse = await fetch(`http://127.0.0.1:8000/doctor/${userId}/profile`);
+            const profileData = await drProfileResponse.json();
+            if (profileData.success && profileData.profile) {
+                doctorIdNumber = profileData.profile.id_number || 'PR-88291-A';
+                if (profileData.profile.first_name) {
+                    docFirstName = profileData.profile.first_name;
+                }
+                if (profileData.profile.last_name && profileData.profile.last_name !== 'null' && profileData.profile.last_name !== 'undefined') {
+                    docLastName = profileData.profile.last_name;
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch doctor profile:", err);
+        }
+
+        // Handle empty or null strings safely
+        docFirstName = String(docFirstName).replace(/\bnull\b/gi, '').replace(/\bundefined\b/gi, '').trim();
+        docLastName = String(docLastName).replace(/\bnull\b/gi, '').replace(/\bundefined\b/gi, '').trim() || 'Schrieber';
+
+        const docName = `${docFirstName} ${docLastName}`.trim();
+
+        const element = document.createElement('div');
+        element.style.padding = '35px';
+        element.style.fontFamily = "'Outfit', 'Inter', sans-serif";
+        element.style.color = '#1e1e1e';
+        element.style.border = '6px double #1a365d';
+        element.style.width = '680px';
+        element.style.background = 'white';
+        element.style.boxSizing = 'border-box';
+        element.style.position = 'relative';
+
+        element.innerHTML = `
+            <!-- Clinic Header -->
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a365d; padding-bottom: 15px; margin-bottom: 25px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <!-- Official System Logo (loaded as inline base64 to avoid local security errors) -->
+                    <img src="${window.SYSTEM_LOGO_BASE64}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <div>
+                        <h1 style="margin: 0; font-size: 26px; color: #1a365d; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Health Sync Clinic</h1>
+                        <p style="margin: 3px 0 0 0; font-size: 11px; color: #4a5568; font-weight: 500;">12, Jalan Sultan Ismail, Kuala Lumpur, Malaysia</p>
+                        <p style="margin: 0; font-size: 11px; color: #4a5568; font-weight: 500;">Tel: +60 3-2142 8888 | Email: contact@healthsync.my</p>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <h2 style="margin: 0; font-size: 18px; color: #2b6cb0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Medical Certificate</h2>
+                    <p style="margin: 3px 0 0 0; font-size: 11px; color: #718096; font-family: monospace;">Serial No: HS-MC-${encounter.encounter_id}-${Math.floor(1000 + Math.random() * 9000)}</p>
+                </div>
+            </div>
+
+            <!-- Certificate Body -->
+            <div style="margin-bottom: 40px; line-height: 1.8; font-size: 14.5px;">
+                <p style="margin-bottom: 20px;"><strong>Date of Examination:</strong> ${formattedVisit}</p>
+                
+                <p style="margin-bottom: 25px;">This is to certify that I have clinically examined the following patient:</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; background: rgba(0,0,0,0.01); border-radius: 4px;">
+                    <tr>
+                        <td style="padding: 8px 12px; width: 30%; color: #4a5568; font-weight: 600;">Patient Name:</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid #cbd5e0; color: #1e1e1e; font-weight: 700; font-size: 15px;">${patientName}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 12px; color: #4a5568; font-weight: 600;">Identification:</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid #cbd5e0; color: #1e1e1e; font-family: monospace;">${notes.ic_number || 'Patient Identity Verified'}</td>
+                    </tr>
+                </table>
+
+                <p style="margin-bottom: 25px;">
+                    In my professional opinion, the patient is diagnosed with <strong style="color: #2d3748; font-weight: 700;">${reasonVal}</strong> 
+                    and is deemed medically unfit for duty.
+                </p>
+                
+                <p style="margin-bottom: 30px;">
+                    Accordingly, the patient has been granted sick leave for a period of 
+                    <strong style="color: #2b6cb0; font-weight: 700; font-size: 16px;">${diffDays} Day(s)</strong>, 
+                    commencing from <strong>${formattedStart}</strong> to <strong>${formattedEnd}</strong> (inclusive of both dates).
+                </p>
+
+                <p style="font-style: italic; font-size: 11.5px; color: #a0aec0; margin-top: 45px; line-height: 1.4;">
+                    * This document is a formal Medical Certificate generated digitally by Health Sync EHR under the license and registration of the signing medical practitioner. Any unauthorized modification constitutes fraud.
+                </p>
+            </div>
+
+            <!-- Doctor Signature Panel -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 60px; border-top: 1px solid #e2e8f0; padding-top: 25px;">
+                <div>
+                    <p style="margin: 0; font-size: 11px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Issued by:</p>
+                    <p style="margin: 6px 0 0 0; font-size: 15px; font-weight: 700; color: #1a365d;">Dr. ${docName}</p>
+                    <p style="margin: 2px 0 0 0; font-size: 12px; color: #4a5568; font-weight: 500;">MMC Registration No: ${doctorIdNumber}</p>
+                    <p style="margin: 2px 0 0 0; font-size: 11px; color: #718096; font-style: italic;">Health Sync EHR Verified Scribe</p>
+                </div>
+                <div style="text-align: center; width: 220px; display: flex; flex-direction: column; align-items: center;">
+                    <div style="font-family: 'Brush Script MT', cursive, sans-serif; font-size: 32px; color: #2b6cb0; margin-bottom: -8px; transform: rotate(-3deg); font-style: italic; letter-spacing: 1px;">
+                        Dr. ${docLastName || 'Mark'}
+                    </div>
+                    <div style="border-bottom: 2px solid #4a5568; margin-bottom: 6px; width: 100%;"></div>
+                    <p style="margin: 0; font-size: 11px; color: #718096; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Authorized Signature</p>
+                </div>
+            </div>
+        `;
+
+        const opt = {
+            margin:       10,
+            filename:     `HealthSync_MC_${patientName.replace(/\s+/g, '_')}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        try {
+            downloadMcBtn.disabled = true;
+            downloadMcBtn.innerText = '⚙️ Generating PDF...';
+            
+            await html2pdf().from(element).set(opt).save();
+            
+            downloadMcBtn.innerText = '✅ Download Complete';
+            setTimeout(() => {
+                downloadMcBtn.disabled = false;
+                downloadMcBtn.innerText = '📥 Download MC PDF';
+                mcModal.classList.add('hidden');
+                historyModal.classList.remove('hidden');
+            }, 1500);
+        } catch (e) {
+            alert("Failed to render PDF: " + e);
+            downloadMcBtn.disabled = false;
+            downloadMcBtn.innerText = '📥 Download MC PDF';
+        }
+    });
+}
+
+window.toggleNotes = function (id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.formatData = (val) => { return val || '--'; };
+
+window.formatJsonStr = function (jsonStr) {
+    try {
+        const obj = JSON.parse(jsonStr);
+        let tableHtml = '<table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; background: white; border-radius: 8px; overflow: hidden;"><tbody>';
+        for (const [key, value] of Object.entries(obj)) {
+            // FIX: Changed from key.startswith to proper native camelCase key.startsWith
+            if (key.startsWith('_')) continue;
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            tableHtml += `
+                <tr style="border-bottom: 1px solid #e5e5e5;">
+                    <th style="padding: 0.8rem 1rem; text-align: left; width: 30%; color: #00a896; background: rgba(0, 168, 150, 0.05);">${formattedKey}</th>
+                    <td class="history-cell" data-key="${key}" style="padding: 0.8rem 1rem; color: #1d1d1f;">${value || 'N/A'}</td>
+                </tr>`;
+        }
+        tableHtml += '</tbody></table>';
+        return tableHtml;
+    } catch { return jsonStr; }
+};

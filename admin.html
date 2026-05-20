@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Health Sync</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .admin-section {
+            margin-bottom: 2rem;
+            background: rgba(255, 255, 255, 0.85); /* Glassy white */
+            backdrop-filter: var(--blur-intensity);
+            -webkit-backdrop-filter: var(--blur-intensity);
+            padding: 2rem;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow);
+            color: #1d1d1f; /* Dark iOS text */
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        .doctor-list, .patient-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .doctor-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .patient-card {
+            background: rgba(0, 0, 0, 0.05);
+            margin: 1rem 0;
+            padding: 1.5rem;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        .history-btn {
+            background: none;
+            border: none;
+            color: #0071e3;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .history-btn:hover {
+            color: #005bb5;
+            text-decoration: underline;
+        }
+        .notes-content {
+            background: rgba(0, 0, 0, 0.03);
+            padding: 1rem;
+            margin-top: 0.8rem;
+            border-radius: var(--radius-sm);
+            display: none;
+        }
+        .admin-section .subtext {
+            color: #515154 !important; /* Force dark gray on light background */
+        }
+    </style>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+<body>
+    <div class="container">
+        <div class="header-top">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img src="logo.png" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: white;">
+                <h1 style="margin: 0;">🛡️ Admin Dashboard</h1>
+            </div>
+            <button id="logout-btn" class="btn btn-secondary">Logout</button>
+        </div>
+
+        <div class="admin-section">
+            <h2>Pending Doctor Approvals</h2>
+            <ul class="doctor-list" id="pending-list">
+                <!-- Pending doctors will load here -->
+            </ul>
+        </div>
+
+        <div class="admin-section">
+            <h2>Upload Medical Guidelines</h2>
+            <p class="subtext" style="margin-bottom: 1rem;">Upload PDF or DOCX files for the Clinical Brain to reference.</p>
+            <form id="upload-guideline-form" style="display: flex; gap: 1rem; align-items: center;">
+                <input type="file" id="guideline-file" accept=".pdf,.docx" required class="btn" style="background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: #1d1d1f;">
+                <button type="submit" class="btn btn-primary" id="upload-btn">Upload Guideline</button>
+            </form>
+            <div id="upload-status" style="margin-top: 1rem; font-weight: bold;"></div>
+        </div>
+
+        <div class="admin-section">
+            <h2>System Overview (All Doctors & Patients)</h2>
+            <div id="overview-list">
+                <!-- Overview will load here -->
+            </div>
+        </div>
+    </div>
+    <script src="admin.js"></script>
+</body>
+</html>
