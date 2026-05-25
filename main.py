@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 print("Loading Whisper model into memory...")
-whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+whisper_model = WhisperModel("medium", device="cpu", compute_type="int8")
 print("Whisper model loaded successfully!")
 
 def hash_password(plain: str) -> str:
