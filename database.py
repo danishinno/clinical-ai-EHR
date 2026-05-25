@@ -28,6 +28,8 @@ def init_db():
             doctor_id INTEGER,
             patient_name TEXT,
             age INTEGER,
+            gender TEXT,
+            queue_status TEXT,
             ic_number TEXT UNIQUE,
             created_at TEXT,
             FOREIGN KEY(doctor_id) REFERENCES users(id)
@@ -61,6 +63,16 @@ def init_db():
 
     try:
         cursor.execute("ALTER TABLE patients ADD COLUMN age INTEGER")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE patients ADD COLUMN gender TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE patients ADD COLUMN queue_status TEXT")
     except sqlite3.OperationalError:
         pass
 
@@ -110,6 +122,30 @@ def init_db():
     except Exception as e:
         print(f"⚠️ Error migrating encounters: {e}")
             
+    # Seed 10 Fake Malaysian patients if none exist
+    cursor.execute("SELECT id FROM patients WHERE ic_number = '810512145693'")
+    seed_exists = cursor.fetchone()
+    if not seed_exists:
+        fake_patients = [
+            ("Tan Ah Teck", 45, "Male", "810512145693"),
+            ("Siti Aminah binti Osman", 34, "Female", "920803105642"),
+            ("Ramasamy Govindasamy", 52, "Male", "741120085431"),
+            ("Muhammad Ridzuan", 28, "Male", "980115145789"),
+            ("Chong Mei Ling", 60, "Female", "660309105432"),
+            ("Fatimah Haron", 72, "Female", "540618086234"),
+            ("Anand Krishnan", 39, "Male", "871022145391"),
+            ("Nurul Izzah", 23, "Female", "030514085698"),
+            ("Lee Kah Seng", 31, "Male", "950711105987"),
+            ("Shalini Devi", 41, "Female", "850402146246")
+        ]
+        from datetime import datetime
+        for name, age, gender, ic in fake_patients:
+            cursor.execute('''
+                INSERT INTO patients (doctor_id, patient_name, age, gender, ic_number, created_at)
+                VALUES (NULL, ?, ?, ?, ?, ?)
+            ''', (name, age, gender, ic, datetime.now().isoformat()))
+        print("✅ 10 Fake Malaysian patients seeded successfully.")
+
     # Create default Master Admin credentials if none exist
     cursor.execute("SELECT id FROM users WHERE username = 'Admin'")
     admin_exists = cursor.fetchone()

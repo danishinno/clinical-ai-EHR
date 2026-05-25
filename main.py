@@ -47,6 +47,18 @@ class ClinicalQuery(BaseModel):
     doctor_id: int
     transcript: str
     ic_number: str = None
+    patient_id: int = None
+
+class PatientRegisterQuery(BaseModel):
+    patient_name: str
+    age: int
+    gender: str
+    ic_number: str
+    doctor_id: int = None
+
+class PatientReassignQuery(BaseModel):
+    patient_id: int
+    doctor_id: int
 
 class AuthQuery(BaseModel):
     username: str
@@ -139,6 +151,11 @@ async def websocket_endpoint(websocket: WebSocket):
 async def process_dictation(query: ClinicalQuery):
     print("\n--- Processing Final Transcript ---")
     
+    # Check if a pre-assigned patient is active
+    active_patient = None
+    if query.patient_id:
+        active_patient = query_db("SELECT * FROM patients WHERE id = ?", (query.patient_id,), one=True)
+    
     system_prompt = """
     You are an expert clinical scribe. Read the transcript between a doctor and patient.
     Extract the patient details and output ONLY a valid JSON object in the SOAP format.
@@ -168,19 +185,33 @@ async def process_dictation(query: ClinicalQuery):
         )
 
         extracted_notes = json.loads(response['message']['content'])
-        patient_name = extracted_notes.get("name") or "Unknown Patient"
-        patient_age = extracted_notes.get("age") or None
-        ic_num = query.ic_number or extracted_notes.get("ic_number") or f"TEMP-{uuid.uuid4().hex[:6].upper()}"
-
-        patient = query_db("SELECT id FROM patients WHERE ic_number = ?", (ic_num,), one=True)
-        if not patient:
-            patient_id = query_db(
-                "INSERT INTO patients (doctor_id, patient_name, age, ic_number, created_at) VALUES (?, ?, ?, ?, ?)",
-                (query.doctor_id, patient_name, patient_age, ic_num, datetime.now().isoformat()),
-                commit=True
-            )
+        
+        if active_patient:
+            patient_name = active_patient["patient_name"]
+            patient_age = active_patient["age"]
+            ic_num = active_patient["ic_number"]
+            patient_id = active_patient["id"]
+            # Override LLM extracted demographics with exact database values
+            extracted_notes["name"] = patient_name
+            extracted_notes["age"] = patient_age
+            extracted_notes["ic_number"] = ic_num
         else:
-            patient_id = patient['id']
+            patient_name = extracted_notes.get("name") or "Unknown Patient"
+            patient_age = extracted_notes.get("age") or None
+            ic_num = query.ic_number or extracted_notes.get("ic_number") or f"TEMP-{uuid.uuid4().hex[:6].upper()}"
+
+            patient = query_db("SELECT id FROM patients WHERE ic_number = ?", (ic_num,), one=True)
+            if not patient:
+                patient_id = query_db(
+                    "INSERT INTO patients (doctor_id, patient_name, age, ic_number, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (query.doctor_id, patient_name, patient_age, ic_num, datetime.now().isoformat()),
+                    commit=True
+                )
+            else:
+                patient_id = patient['id']
+
+        # Clear the queue status of the patient to complete the consultation
+        query_db("UPDATE patients SET queue_status = 'completed' WHERE id = ?", (patient_id,), commit=True)
 
         doc_id = str(uuid.uuid4())
         document_text = f"Raw Transcript: {query.transcript}\n\nStructured Notes: {json.dumps(extracted_notes)}"
@@ -522,3 +553,102 @@ async def update_doctor_profile(doctor_id: int, profile: ProfileUpdateQuery):
         return {"success": False, "message": "Username is already taken. Please choose another."}
     except Exception as e:
         return {"success": False, "message": f"Error updating profile: {str(e)}"}
+
+# CLINICAL IDENTITY AND ASSIGNMENT ENDPOINTS
+@app.get("/admin/doctors")
+async def get_all_doctors():
+    doctors = query_db("SELECT id, username, first_name, last_name, specialty FROM users WHERE role = 'dr' AND is_approved = 1")
+    return {"doctors": doctors}
+
+import re
+from fastapi import HTTPException
+
+@app.post("/admin/register-patient")
+async def register_patient(query: PatientRegisterQuery):
+    # Regex alphanumeric check for IC Number
+    if not re.match("^[a-zA-Z0-9]+$", query.ic_number):
+        return {"success": False, "message": "Access Denied: Patient ID / IC Number cannot contain special characters or spaces."}
+
+    # Check if patient already exists
+    existing = query_db("SELECT id FROM patients WHERE ic_number = ?", (query.ic_number,), one=True)
+    
+    if existing:
+        patient_id = existing["id"]
+        # Patient already exists, update queue if doctor pre-assigned
+        if query.doctor_id:
+            query_db(
+                "UPDATE patients SET doctor_id = ?, queue_status = 'on_hold' WHERE id = ?",
+                (query.doctor_id, patient_id),
+                commit=True
+            )
+            return {"success": True, "message": "Returning patient successfully queued.", "patient_id": patient_id}
+        else:
+            return {"success": False, "message": "Patient is already registered. Please use the Returning Patient list to assign them to a doctor."}
+
+    # Register new patient
+    patient_id = query_db(
+        "INSERT INTO patients (doctor_id, patient_name, age, gender, ic_number, queue_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (query.doctor_id, query.patient_name, query.age, query.gender, query.ic_number, 'on_hold' if query.doctor_id else None, datetime.now().isoformat()),
+        commit=True
+    )
+    return {"success": True, "message": "Patient registered successfully.", "patient_id": patient_id}
+
+@app.get("/admin/active-queue")
+async def get_active_queue():
+    queue = query_db("""
+        SELECT p.id as patient_id, p.patient_name, p.age, p.gender, p.ic_number, p.doctor_id,
+               u.first_name as doc_first, u.last_name as doc_last
+        FROM patients p
+        LEFT JOIN users u ON p.doctor_id = u.id
+        WHERE p.queue_status = 'on_hold'
+    """)
+    return {"queue": queue}
+
+@app.post("/admin/reassign-patient")
+async def reassign_patient(query: PatientReassignQuery):
+    query_db(
+        "UPDATE patients SET doctor_id = ?, queue_status = 'on_hold' WHERE id = ?",
+        (query.doctor_id, query.patient_id),
+        commit=True
+    )
+    return {"success": True, "message": "Patient reassigned successfully."}
+
+@app.get("/doctor/{doctor_id}/on-hold")
+async def get_doctor_on_hold(doctor_id: int):
+    patients = query_db(
+        "SELECT id, patient_name, age, gender, ic_number FROM patients WHERE doctor_id = ? AND queue_status = 'on_hold'",
+        (doctor_id,)
+    )
+    return {"patients": patients}
+
+@app.get("/patient/{patient_id}/history")
+async def get_patient_history(patient_id: int, doctor_id: int):
+    # Enforce strict safety check:
+    # 1. Is this patient currently assigned to the requesting doctor?
+    assigned = query_db("SELECT id FROM patients WHERE id = ? AND doctor_id = ? AND queue_status = 'on_hold'", (patient_id, doctor_id), one=True)
+    
+    # 2. Or has the requesting doctor treated this patient in the past?
+    treated = query_db("SELECT id FROM encounters WHERE patient_id = ? AND doctor_id = ?", (patient_id, doctor_id), one=True)
+    
+    if not assigned and not treated:
+        raise HTTPException(
+            status_code=403,
+            detail="Access Denied: You do not have active consultation assignment or historical relationship for this patient's records."
+        )
+    
+    # Retrieve all historic encounters across all doctors
+    encounters = query_db("""
+        SELECT e.id as encounter_id, e.structured_notes_json, e.created_at, e.transcript, e.doc_id,
+               u.first_name as doc_first, u.last_name as doc_last
+        FROM encounters e
+        JOIN users u ON e.doctor_id = u.id
+        WHERE e.patient_id = ?
+        ORDER BY e.created_at DESC
+    """, (patient_id,))
+    
+    return {"encounters": encounters}
+
+@app.get("/admin/patients-list")
+async def get_all_patients():
+    patients = query_db("SELECT id, patient_name, age, gender, ic_number FROM patients ORDER BY patient_name ASC")
+    return {"patients": patients}

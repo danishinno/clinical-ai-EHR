@@ -93,6 +93,78 @@
         </div>
 
         <div class="admin-section">
+            <h2>Patient Registration & Consultation Queuing</h2>
+            <p class="subtext" style="margin-bottom: 1.5rem;">Register a new patient or select an existing patient to assign them to a doctor's active queue.</p>
+            
+            <!-- Registration Mode Toggle -->
+            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                <button id="mode-new-btn" class="btn btn-primary" type="button" style="flex: 1;">New Registration</button>
+                <button id="mode-returning-btn" class="btn btn-secondary" type="button" style="flex: 1; background: rgba(0,0,0,0.05); color: #1d1d1f;">Returning Patient</button>
+            </div>
+
+            <!-- Patient Queue Form -->
+            <form id="patient-registration-form" style="display: flex; flex-direction: column; gap: 1.2rem;">
+                <div id="new-patient-fields" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div style="display: flex; gap: 1rem;">
+                        <div style="flex: 2;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient Full Name</label>
+                            <input type="text" id="reg-name" placeholder="e.g. Ahmad Farhan" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Age</label>
+                            <input type="number" id="reg-age" placeholder="e.g. 29" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem;">
+                        <div style="flex: 1;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Gender</label>
+                            <select id="reg-gender" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                        <div style="flex: 2;">
+                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient ID / IC Number (Letters & Numbers Only)</label>
+                            <input type="text" id="reg-ic" placeholder="e.g. 950102145693" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Returning Patient Fields (Hidden initially) -->
+                <div id="returning-patient-fields" class="hidden">
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Select Registered Patient</label>
+                    <select id="reg-patient-select" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white; margin-bottom: 1rem;">
+                        <option value="">-- Choose a patient --</option>
+                        <!-- Loaded dynamically -->
+                    </select>
+                </div>
+
+                <!-- Doctor Assignment -->
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Assign to Doctor</label>
+                    <select id="reg-doctor-select" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
+                        <option value="">-- Choose a Doctor --</option>
+                        <!-- Loaded dynamically -->
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.8rem; margin-top: 0.5rem; font-weight: 600;" id="register-submit-btn">
+                    Queue Patient for Consultation
+                </button>
+            </form>
+            <div id="registration-status" style="margin-top: 1rem; font-weight: bold;"></div>
+        </div>
+
+        <div class="admin-section">
+            <h2>Live Consultation Queue</h2>
+            <p class="subtext" style="margin-bottom: 1.5rem;">Patients currently waiting in line. You can re-assign them to another doctor if needed.</p>
+            <div id="live-queue-container" style="display: flex; flex-direction: column; gap: 1rem;">
+                <!-- Live queue lists loaded here -->
+                <p class="placeholder-text" style="padding: 1rem;">No patients currently in queue.</p>
+            </div>
+        </div>
+
+        <div class="admin-section">
             <h2>System Overview (All Doctors & Patients)</h2>
             <div id="overview-list">
                 <!-- Overview will load here -->

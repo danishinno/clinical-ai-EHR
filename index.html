@@ -23,8 +23,15 @@
                 </div>
             </div>
             <div style="position: relative; display: inline-block;">
-                <button id="menu-dots-btn" class="btn btn-secondary" style="font-size: 1.2rem; padding: 0.2rem 0.8rem; line-height: 1; border-radius: 20px;">⋯</button>
-                <div id="header-dropdown" class="dropdown-content hidden" style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 200px; box-shadow: var(--shadow); border-radius: var(--radius-sm); border: 1px solid var(--border-color); z-index: 10;">
+                <button id="menu-dots-btn" class="btn btn-secondary" style="font-size: 1.2rem; padding: 0.2rem 0.8rem; line-height: 1; border-radius: 20px; position: relative;">⋯<span id="queue-red-dot" class="queue-red-dot hidden"></span></button>
+                <div id="header-dropdown" class="dropdown-content hidden" style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 260px; box-shadow: var(--shadow); border-radius: var(--radius-lg); border: 1px solid var(--border-color); z-index: 10;">
+                    <!-- Active Queue Section -->
+                    <div id="queue-section" class="hidden" style="border-bottom: 1px solid var(--border-color); padding: 0.8rem 1rem; max-height: 250px; overflow-y: auto;">
+                        <p style="margin: 0 0 0.5rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color); display: flex; align-items: center; gap: 5px;">🔴 Patients on Hold</p>
+                        <div id="queue-list">
+                            <!-- Patients on hold will load here -->
+                        </div>
+                    </div>
                     <button onclick="window.location.href='profile.html'" class="dropdown-item" style="border-bottom: 1px solid var(--border-color);">⚙️ Profile Settings</button>
                     <button id="history-btn" class="dropdown-item" style="border-bottom: 1px solid var(--border-color);">🩺 Patient History</button>
                     <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);">🚪 Logout</button>
@@ -64,11 +71,15 @@
                     <div id="extracted-data" class="data-grid">
                         <div class="data-field">
                             <label>Name</label>
-                            <div class="value editable-field" id="val-name" contenteditable="true">--</div>
+                            <div class="value editable-field" id="val-name" contenteditable="false">--</div>
                         </div>
                         <div class="data-field">
                             <label>Age</label>
-                            <div class="value editable-field" id="val-age" contenteditable="true">--</div>
+                            <div class="value editable-field" id="val-age" contenteditable="false">--</div>
+                        </div>
+                        <div class="data-field">
+                            <label>Gender</label>
+                            <div class="value editable-field" id="val-gender" contenteditable="false">--</div>
                         </div>
                         <div class="data-field">
                             <label>Subjective (S)</label>
@@ -140,6 +151,15 @@
             <div class="panel-header">
                 <h2>Patient History</h2>
                 <button id="close-modal-btn" class="btn btn-secondary">Close</button>
+            </div>
+            <!-- Active Patient Tab Switch -->
+            <div id="history-filter-container" class="hidden" style="padding: 0.8rem 1.5rem; background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border-color); display: flex; gap: 10px;">
+                <button id="history-tab-current" class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 20px; font-weight: 600;" type="button">
+                    Current Patient
+                </button>
+                <button id="history-tab-past" class="btn btn-secondary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 20px; font-weight: 600;" type="button">
+                    Past Patients
+                </button>
             </div>
             <div id="history-list" style="padding: 1.5rem; overflow-y: auto; flex-grow: 1;">
                 <!-- History loads here -->

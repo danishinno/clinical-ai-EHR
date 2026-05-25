@@ -35,10 +35,15 @@ const dataGrid = document.getElementById('extracted-data');
 
 const valName = document.getElementById('val-name');
 const valAge = document.getElementById('val-age');
+const valGender = document.getElementById('val-gender');
 const valSubjective = document.getElementById('val-subjective');
 const valObjective = document.getElementById('val-objective');
 const valAssessment = document.getElementById('val-assessment');
 const valPlan = document.getElementById('val-plan');
+
+const queueRedDot = document.getElementById('queue-red-dot');
+const queueSection = document.getElementById('queue-section');
+const queueList = document.getElementById('queue-list');
 
 let socket;
 let isRecording = false;
@@ -47,6 +52,7 @@ let currentDocId = null;
 let globalStream = null;
 let cdsHistory = [];
 let loadedEncounters = [];
+let currentPatientId = null;
 
 async function getGlobalStream() {
     if (!globalStream) {
@@ -123,7 +129,7 @@ finishBtn.addEventListener('click', async () => {
         const response = await fetch('http://127.0.0.1:8000/process-dictation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ doctor_id: userId, transcript: fullTranscript })
+            body: JSON.stringify({ doctor_id: userId, transcript: fullTranscript, patient_id: currentPatientId })
         });
 
         const data = await response.json();
@@ -132,10 +138,14 @@ finishBtn.addEventListener('click', async () => {
 
         valName.textContent = window.formatData(data.name);
         valAge.textContent = window.formatData(data.age);
+        valGender.textContent = window.formatData(data.gender || (active_patient_details ? active_patient_details.gender : valGender.textContent));
         valSubjective.textContent = window.formatData(data.subjective);
         valObjective.textContent = window.formatData(data.objective);
         valAssessment.textContent = window.formatData(data.assessment);
         valPlan.textContent = window.formatData(data.plan);
+
+        // Immediately poll queue to reflect completion
+        if (typeof pollQueue === 'function') pollQueue();
 
     } catch (error) {
         alert('Failed to extract unstructured stream patterns.');
@@ -277,36 +287,61 @@ const historyBtn = document.getElementById('history-btn');
 const historyModal = document.getElementById('history-modal');
 const closeModalBtn = document.getElementById('close-modal-btn');
 const historyList = document.getElementById('history-list');
+const historyFilterContainer = document.getElementById('history-filter-container');
+const historyTabCurrent = document.getElementById('history-tab-current');
+const historyTabPast = document.getElementById('history-tab-past');
 
-historyBtn.addEventListener('click', async () => {
-    historyModal.classList.remove('hidden');
+let activeHistoryTab = 'current'; // 'current' or 'past'
+
+async function fetchAndRenderHistory() {
     historyList.innerHTML = '<div class="spinner"></div> Loading dynamic encounters logs...';
-
     try {
-        const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/patients`);
+        let url = `http://127.0.0.1:8000/doctor/${userId}/patients`;
+        const filterByActive = currentPatientId && activeHistoryTab === 'current';
+        
+        if (filterByActive) {
+            url = `http://127.0.0.1:8000/patient/${currentPatientId}/history?doctor_id=${userId}`;
+        }
+        
+        const response = await fetch(url);
+        
+        if (response.status === 403) {
+            historyList.innerHTML = '<p class="error">Access Denied: You do not have active consultation assignment or historical relationship for this patient\'s records.</p>';
+            return;
+        }
+        
         const data = await response.json();
-        loadedEncounters = data.patients || [];
+        const encounters = data.patients || data.encounters || [];
+        loadedEncounters = encounters.map(e => ({
+            ...e,
+            encounter_id: e.encounter_id,
+            patient_name: e.patient_name || valName.textContent
+        }));
+        
         historyList.innerHTML = '';
 
-        if (!data.patients || data.patients.length === 0) {
+        if (encounters.length === 0) {
             historyList.innerHTML = '<p>No historical clinical consult logs found.</p>';
             return;
         }
 
-        data.patients.forEach(p => {
+        encounters.forEach(p => {
             const div = document.createElement('div');
             div.style.marginBottom = '1rem';
             div.style.padding = '1rem';
-            div.style.background = '#f5f5f7';
+            div.style.background = 'rgba(255, 255, 255, 0.08)';
             div.style.borderRadius = '8px';
+            div.style.border = '1px solid rgba(255, 255, 255, 0.1)';
 
             div.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                    <button id="title-btn-${p.encounter_id}" data-timestamp="${p.created_at}"
-                        style="background:none;border:none;color:var(--primary-color);font-weight:600;font-size:1rem;cursor:pointer;text-align:left;"
-                        onclick="toggleNotes('notes-${p.encounter_id}')">
-                        ▶ ${p.patient_name || 'Unknown Patient'} (${new Date(p.created_at).toLocaleString()})
-                    </button>
+                    <div style="text-align: left;">
+                        <button id="title-btn-${p.encounter_id}" data-timestamp="${p.created_at}"
+                            style="background:none;border:none;color:var(--primary-color);font-weight:600;font-size:1rem;cursor:pointer;text-align:left;padding:0;"
+                            onclick="toggleNotes('notes-${p.encounter_id}')">
+                            ▶ ${p.patient_name || valName.textContent} (${new Date(p.created_at).toLocaleString()})
+                        </button>
+                    </div>
                     <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
                         <button onclick="generateCertificate(${p.encounter_id})" class="btn btn-secondary"
                             style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
@@ -327,6 +362,38 @@ historyBtn.addEventListener('click', async () => {
     } catch (err) {
         historyList.innerHTML = '<p class="error">Failed to parse encounter timeline stream profiles.</p>';
     }
+}
+
+if (historyTabCurrent && historyTabPast) {
+    historyTabCurrent.addEventListener('click', () => {
+        activeHistoryTab = 'current';
+        historyTabCurrent.className = 'btn btn-primary';
+        historyTabPast.className = 'btn btn-secondary';
+        fetchAndRenderHistory();
+    });
+
+    historyTabPast.addEventListener('click', () => {
+        activeHistoryTab = 'past';
+        historyTabPast.className = 'btn btn-primary';
+        historyTabCurrent.className = 'btn btn-secondary';
+        fetchAndRenderHistory();
+    });
+}
+
+historyBtn.addEventListener('click', async () => {
+    historyModal.classList.remove('hidden');
+    
+    if (currentPatientId) {
+        if (historyFilterContainer) historyFilterContainer.classList.remove('hidden');
+        activeHistoryTab = 'current';
+        if (historyTabCurrent) historyTabCurrent.className = 'btn btn-primary';
+        if (historyTabPast) historyTabPast.className = 'btn btn-secondary';
+    } else {
+        if (historyFilterContainer) historyFilterContainer.classList.add('hidden');
+        activeHistoryTab = 'past';
+    }
+
+    fetchAndRenderHistory();
 });
 
 closeModalBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
@@ -630,3 +697,79 @@ window.formatJsonStr = function (jsonStr) {
         return tableHtml;
     } catch { return jsonStr; }
 };
+
+let active_patient_details = null;
+
+async function pollQueue() {
+    if (!userId) return;
+    try {
+        const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/on-hold`);
+        const data = await response.json();
+        
+        if (data.patients && data.patients.length > 0) {
+            queueRedDot.classList.remove('hidden');
+            queueSection.classList.remove('hidden');
+            
+            queueList.innerHTML = '';
+            data.patients.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'queue-patient-item';
+                item.innerHTML = `
+                    <div class="queue-patient-info">
+                        <span class="queue-patient-name">${p.patient_name}</span>
+                        <span class="queue-patient-meta">${p.age} y/o, ${p.gender} | ID: ${p.ic_number}</span>
+                    </div>
+                    <span style="font-size: 0.9rem; color: var(--primary-color);">➡️</span>
+                `;
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    loadPatient(p);
+                });
+                queueList.appendChild(item);
+            });
+        } else {
+            queueRedDot.classList.add('hidden');
+            queueSection.classList.add('hidden');
+            queueList.innerHTML = '';
+        }
+    } catch (err) {
+        console.error('Error polling doctor queue:', err);
+    }
+}
+
+function loadPatient(patient) {
+    currentPatientId = patient.id;
+    active_patient_details = patient;
+    
+    // Close the dropdown menu
+    headerDropdown.classList.remove('show');
+    headerDropdown.classList.add('hidden');
+    
+    // Populate demographic fields and lock them
+    valName.textContent = patient.patient_name;
+    valName.setAttribute('contenteditable', 'false');
+    
+    valAge.textContent = patient.age;
+    valAge.setAttribute('contenteditable', 'false');
+    
+    valGender.textContent = patient.gender;
+    valGender.setAttribute('contenteditable', 'false');
+    
+    // Clear clinical note fields for fresh consultation
+    valSubjective.textContent = '--';
+    valObjective.textContent = '--';
+    valAssessment.textContent = '--';
+    valPlan.textContent = '--';
+    
+    // Clear active encounter
+    currentEncounterId = null;
+    currentDocId = null;
+    const saveBtn = document.getElementById('save-notes-btn');
+    if (saveBtn) saveBtn.classList.add('hidden');
+    
+    alert(`Active consultation assigned for: ${patient.patient_name}`);
+}
+
+// Start queue polling
+pollQueue();
+setInterval(pollQueue, 10000);
