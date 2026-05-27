@@ -135,6 +135,9 @@ finishBtn.addEventListener('click', async () => {
         const data = await response.json();
         currentEncounterId = data._encounter_id;
         currentDocId = data._doc_id;
+        if (data._patient_id) {
+            currentPatientId = data._patient_id;
+        }
 
         valName.textContent = window.formatData(data.name);
         valAge.textContent = window.formatData(data.age);
@@ -168,7 +171,10 @@ function stopRecordingUI() {
 const saveNotesBtn = document.getElementById('save-notes-btn');
 if (saveNotesBtn) {
     saveNotesBtn.addEventListener('click', async () => {
-        if (!currentEncounterId) return;
+        if (!currentEncounterId && !currentPatientId) {
+            alert('Please select a patient from the queue or start live dictation first.');
+            return;
+        }
 
         const updatedNotes = {
             name: valName.textContent,
@@ -179,28 +185,77 @@ if (saveNotesBtn) {
             plan: valPlan.textContent
         };
 
-        try {
-            const response = await fetch(`http://127.0.0.1:8000/encounter/${currentEncounterId}/notes`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    encounter_id: currentEncounterId,
-                    doc_id: currentDocId,
-                    updated_notes: updatedNotes,
-                    patient_name: updatedNotes.name
-                })
-            });
+        if (currentEncounterId) {
+            try {
+                saveNotesBtn.disabled = true;
+                saveNotesBtn.innerHTML = 'Saving...';
+                const response = await fetch(`http://127.0.0.1:8000/encounter/${currentEncounterId}/notes`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        encounter_id: currentEncounterId,
+                        doc_id: currentDocId,
+                        updated_notes: updatedNotes,
+                        patient_name: updatedNotes.name
+                    })
+                });
 
-            const result = await response.json();
-            if (result.success) {
-                saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
-                cdsHistory = [];
-                setTimeout(() => {
-                    saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Changes';
-                }, 2000);
+                const result = await response.json();
+                if (result.success) {
+                    saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
+                    cdsHistory = [];
+                    setTimeout(() => {
+                        saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                    }, 2000);
+                } else {
+                    alert('Error updating consultation: ' + result.message);
+                    saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                }
+            } catch (err) {
+                alert('Failed to execute update sequence pipeline.');
+                saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+            } finally {
+                saveNotesBtn.disabled = false;
             }
-        } catch (err) {
-            alert('Failed to execute update sequence pipeline.');
+        } else if (currentPatientId) {
+            try {
+                saveNotesBtn.disabled = true;
+                saveNotesBtn.innerHTML = 'Saving...';
+                
+                const response = await fetch(`http://127.0.0.1:8000/encounter/save`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        doctor_id: parseInt(userId),
+                        patient_id: currentPatientId,
+                        transcript: "Manually entered clinical note.",
+                        structured_notes: updatedNotes
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    currentEncounterId = result.encounter_id;
+                    currentDocId = result.doc_id;
+
+                    saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
+                    cdsHistory = [];
+                    
+                    if (typeof pollQueue === 'function') pollQueue();
+
+                    setTimeout(() => {
+                        saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                    }, 2000);
+                } else {
+                    alert('Error creating consultation: ' + result.message);
+                    saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                }
+            } catch (err) {
+                alert('Failed to create new manual consultation.');
+                saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+            } finally {
+                saveNotesBtn.disabled = false;
+            }
         }
     });
 }
@@ -231,6 +286,7 @@ async function askClinicalBrain(question) {
                 user_question: question,
                 transcript: transcriptContent.innerText.trim(),
                 doctor_id: parseInt(userId),
+                patient_id: currentPatientId ? parseInt(currentPatientId) : null,
                 history: cdsHistory
             })
         });
@@ -325,39 +381,101 @@ async function fetchAndRenderHistory() {
             return;
         }
 
-        encounters.forEach(p => {
-            const div = document.createElement('div');
-            div.style.marginBottom = '1rem';
-            div.style.padding = '1rem';
-            div.style.background = 'rgba(255, 255, 255, 0.08)';
-            div.style.borderRadius = '8px';
-            div.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+        // Group encounters by patient name
+        const patientGroup = {};
+        encounters.forEach(e => {
+            const name = e.patient_name || valName.textContent;
+            if (!patientGroup[name]) {
+                patientGroup[name] = [];
+            }
+            patientGroup[name].push(e);
+        });
 
-            div.innerHTML = `
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
-                    <div style="text-align: left;">
-                        <button id="title-btn-${p.encounter_id}" data-timestamp="${p.created_at}"
-                            style="background:none;border:none;color:var(--primary-color);font-weight:600;font-size:1rem;cursor:pointer;text-align:left;padding:0;"
-                            onclick="toggleNotes('notes-${p.encounter_id}')">
-                            ▶ ${p.patient_name || valName.textContent} (${new Date(p.created_at).toLocaleString()})
-                        </button>
-                    </div>
-                    <div style="display: flex; gap: 0.5rem; flex-shrink: 0;">
-                        <button onclick="generateCertificate(${p.encounter_id})" class="btn btn-secondary"
-                            style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
-                            📄 MC
-                        </button>
-                        <button onclick="toggleInlineEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
-                            style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
-                            ✏️ Edit Note
-                        </button>
-                    </div>
+        // Loop through each patient group to render their dedicated card
+        Object.entries(patientGroup).forEach(([patientName, pEncounters]) => {
+            // Summarize all unique doctors who have treated this specific patient
+            const patientDoctors = [];
+            pEncounters.forEach(p => {
+                if (p.doc_first && p.doc_last) {
+                    const name = `Dr. ${p.doc_first} ${p.doc_last}`.trim();
+                    if (name && !patientDoctors.includes(name)) {
+                        patientDoctors.push(name);
+                    }
+                }
+            });
+
+            const patientDiv = document.createElement('div');
+            patientDiv.style.marginBottom = '1rem';
+            patientDiv.style.background = 'rgba(255, 255, 255, 0.05)';
+            patientDiv.style.borderRadius = '12px';
+            patientDiv.style.border = '1px solid rgba(255, 255, 255, 0.08)';
+            patientDiv.style.overflow = 'hidden';
+
+            const pIdSafe = patientName.replace(/[^a-zA-Z0-9]/g, '_');
+            const consContainerId = `cons-container-${pIdSafe}`;
+
+            // Patient Card Header (ONLY name and expander button)
+            patientDiv.innerHTML = `
+                <div style="padding: 1.2rem; background: rgba(255, 255, 255, 0.03); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.3s;"
+                     onclick="togglePatientConsultations('${consContainerId}')">
+                    <span style="font-weight: 700; font-size: 1.15rem; color: var(--primary-color); display: flex; align-items: center; gap: 8px;">
+                        👤 ${patientName}
+                    </span>
+                    <span id="arrow-${consContainerId}" style="font-size: 0.9rem; color: #86868b; transition: transform 0.3s; font-weight: 600;">▼ Expand (${pEncounters.length} visit${pEncounters.length > 1 ? 's' : ''})</span>
                 </div>
-                <div id="notes-${p.encounter_id}" style="display:none; margin-top:1rem; padding:0.5rem; background:rgba(255,255,255,0.8); border-radius:8px;">
-                    ${formatJsonStr(p.structured_notes_json)}
+                
+                <div id="${consContainerId}" style="display: none; padding: 1.2rem; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.1);">
+                    ${patientDoctors.length > 0 ? `
+                        <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: rgba(0, 168, 150, 0.15); border-radius: 8px; border: 1px solid rgba(0, 168, 150, 0.2); color: #00a896; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                            🩺 Treating Practitioners: ${patientDoctors.join(', ')}
+                        </div>
+                    ` : ''}
+                    <div id="cons-rows-${pIdSafe}" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <!-- Consultations list loaded here -->
+                    </div>
                 </div>
             `;
-            historyList.appendChild(div);
+
+            historyList.appendChild(patientDiv);
+
+            // Populate the consultations rows for this patient
+            const rowsContainer = patientDiv.querySelector(`#cons-rows-${pIdSafe}`);
+            pEncounters.forEach(p => {
+                const rowDiv = document.createElement('div');
+                rowDiv.style.background = 'rgba(255, 255, 255, 0.04)';
+                rowDiv.style.border = '1px solid rgba(255, 255, 255, 0.06)';
+                rowDiv.style.borderRadius = '8px';
+                rowDiv.style.padding = '1rem';
+                rowDiv.style.display = 'flex';
+                rowDiv.style.flexDirection = 'column';
+                rowDiv.style.gap = '0.8rem';
+
+                const doctorName = (p.doc_first && p.doc_last) ? `Dr. ${p.doc_first} ${p.doc_last}` : 'Unknown Doctor';
+                const formattedDate = new Date(p.created_at).toLocaleString();
+
+                rowDiv.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; cursor: pointer;"
+                         onclick="toggleConsultationDetails('notes-${p.encounter_id}', this)">
+                        <div style="text-align: left; font-size: 0.95rem; font-weight: 600; color: #ffffff; display: flex; align-items: center; gap: 6px;">
+                            📅 Consultation on ${formattedDate} <span style="font-size: 0.85rem; color: #86868b; font-weight: 500;">(Treated by ${doctorName})</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-shrink: 0;" onclick="event.stopPropagation();">
+                            <button onclick="generateCertificate(${p.encounter_id})" class="btn btn-secondary"
+                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
+                                📄 MC
+                            </button>
+                            <button onclick="toggleInlineEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
+                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
+                                ✏️ Edit Note
+                            </button>
+                        </div>
+                    </div>
+                    <div id="notes-${p.encounter_id}" style="display:none; padding:0.8rem; background:rgba(255,255,255,0.9); border-radius:8px; color: #1d1d1f;">
+                        ${formatJsonStr(p.structured_notes_json)}
+                    </div>
+                `;
+                rowsContainer.appendChild(rowDiv);
+            });
         });
     } catch (err) {
         historyList.innerHTML = '<p class="error">Failed to parse encounter timeline stream profiles.</p>';
@@ -677,6 +795,25 @@ window.toggleNotes = function (id) {
     if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
 
+window.togglePatientConsultations = function (id) {
+    const el = document.getElementById(id);
+    const arrow = document.getElementById(`arrow-${id}`);
+    if (el) {
+        const isHidden = el.style.display === 'none';
+        el.style.display = isHidden ? 'block' : 'none';
+        if (arrow) {
+            arrow.innerText = isHidden ? `▲ Collapse` : `▼ Expand`;
+        }
+    }
+};
+
+window.toggleConsultationDetails = function (id, headerElement) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+};
+
 window.formatData = (val) => { return val || '--'; };
 
 window.formatJsonStr = function (jsonStr) {
@@ -765,7 +902,10 @@ function loadPatient(patient) {
     currentEncounterId = null;
     currentDocId = null;
     const saveBtn = document.getElementById('save-notes-btn');
-    if (saveBtn) saveBtn.classList.add('hidden');
+    if (saveBtn) {
+        saveBtn.classList.remove('hidden');
+        saveBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+    }
     
     alert(`Active consultation assigned for: ${patient.patient_name}`);
 }
