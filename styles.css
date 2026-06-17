@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&display=swap');
+
 /* iOS 26-inspired styling structure */
 :root {
     --bg-color: #000000;
@@ -24,7 +26,7 @@
 }
 
 body {
-    font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'DM Serif Display', serif;
     background: radial-gradient(circle at 10% 20%, #003B46 0%, #00877a 100%);
     background-attachment: fixed;
     color: var(--text-main);
@@ -296,8 +298,8 @@ h2 {
     width: 45px;
     height: 45px;
     border-radius: 50%;
-    object-fit: cover;
-    background: white;
+    object-fit: contain;
+    background: transparent;
 }
 
 .cds-panel {
@@ -564,7 +566,8 @@ body > .container > header .subtext {
     border-radius: 50%;
     z-index: 2;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    background-color: white;
+    background-color: transparent;
+    object-fit: contain;
 }
 
 .splash-swirl {
@@ -712,4 +715,276 @@ body > .container > header .subtext {
     border: 1px dashed rgba(255, 255, 255, 0.1) !important;
     cursor: not-allowed;
     color: rgba(255, 255, 255, 0.5);
+}
+
+/* Modern EHR Workspace & Sidebar Layout */
+.workspace-container {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+    margin-top: 1.5rem;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    width: 100%;
+}
+
+.queue-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    backdrop-filter: var(--blur-intensity);
+    -webkit-backdrop-filter: var(--blur-intensity);
+    height: 600px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 1;
+}
+
+.queue-sidebar.collapsed {
+    width: 0;
+    opacity: 0;
+    margin-right: -1.5rem;
+    border-color: transparent;
+    pointer-events: none;
+}
+
+.main-content-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    min-width: 0; /* Prevents overflow grid issues */
+}
+
+/* Horizontal Demographics & Safety Banner */
+.demographics-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 0.8rem 1.8rem;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid var(--border-color);
+    border-radius: 999px; /* Pill shape */
+    backdrop-filter: var(--blur-intensity);
+    -webkit-backdrop-filter: var(--blur-intensity);
+    box-shadow: var(--shadow);
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.demographics-patient-info {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.demographics-item {
+    font-size: 0.95rem;
+}
+
+.demographics-item strong {
+    color: var(--primary-color);
+}
+
+.safety-badges {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.badge {
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.badge-danger {
+    background-color: var(--danger-color);
+    color: white;
+    animation: danger-pulse 2s infinite;
+}
+
+.badge-success {
+    background-color: #34c759;
+    color: white;
+}
+
+.badge-warning {
+    background-color: #ff9500;
+    color: white;
+}
+
+@keyframes danger-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 59, 48, 0); }
+}
+
+/* Interactive Prescriptions Section */
+.prescription-container {
+    margin-top: 1.2rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 1rem;
+}
+
+.prescription-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+}
+
+.prescription-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.prescription-list-header {
+    display: grid;
+    grid-template-columns: 2.2fr 1fr 1.2fr 1fr auto;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.prescription-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.prescription-row {
+    display: grid;
+    grid-template-columns: 2.2fr 1fr 1.2fr 1fr auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.prescription-row input {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: white;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    outline: none;
+    transition: all 0.2s;
+    width: 100%;
+    font-family: inherit;
+}
+
+.prescription-row input:focus {
+    border-color: var(--primary-color);
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.delete-presc-btn {
+    background: none;
+    border: none;
+    color: var(--danger-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.2rem;
+    transition: transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-presc-btn:hover {
+    transform: scale(1.25);
+    color: #ff453a;
+}
+
+/* Digital Signature Verification Stamp Overlays */
+.notes-content-wrapper {
+    position: relative;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.signature-stamp-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: var(--radius-xl);
+    animation: fade-in 0.3s ease;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.signature-stamp {
+    border: 4px double #34c759;
+    color: #34c759;
+    background: rgba(0, 0, 0, 0.9);
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 0.8rem 1.6rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    transform: rotate(-6deg);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    animation: stamp-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+@keyframes stamp-in {
+    0% { transform: scale(3.5) rotate(-25deg); opacity: 0; }
+    100% { transform: scale(1) rotate(-6deg); opacity: 1; }
+}
+
+.signature-stamp-date {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(52, 199, 89, 0.85);
+    letter-spacing: 0.05em;
+}
+
+/* Sidebar Toggle Switch Button */
+.btn-toggle-sidebar {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-toggle-sidebar:hover {
+    background-color: rgba(255, 255, 255, 0.2);
 }

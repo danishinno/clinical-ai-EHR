@@ -88,7 +88,7 @@ startBtn.addEventListener('click', async () => {
 
             isRecording = true;
             startBtn.classList.add('recording');
-            startBtn.innerHTML = '<span class="icon">🔴</span> Recording...';
+            startBtn.innerHTML = '<span class="icon"></span> Recording...';
             finishBtn.disabled = false;
             transcriptPlaceholder.classList.add('hidden');
         };
@@ -164,7 +164,7 @@ finishBtn.addEventListener('click', async () => {
 function stopRecordingUI() {
     isRecording = false;
     startBtn.classList.remove('recording');
-    startBtn.innerHTML = '<span class="icon">🎙️</span> Start Live Dictation';
+    startBtn.innerHTML = '<span class="icon"></span> Start Live Dictation';
     finishBtn.disabled = true;
 }
 
@@ -176,13 +176,25 @@ if (saveNotesBtn) {
             return;
         }
 
+        const prescriptions = [];
+        document.querySelectorAll('.prescription-row').forEach(row => {
+            const drug = row.querySelector('.presc-drug').value.trim();
+            const dosage = row.querySelector('.presc-dosage').value.trim();
+            const freq = row.querySelector('.presc-freq').value.trim();
+            const dur = row.querySelector('.presc-duration').value.trim();
+            if (drug) {
+                prescriptions.push({ drug, dosage, frequency: freq, duration: dur });
+            }
+        });
+
         const updatedNotes = {
             name: valName.textContent,
             age: valAge.textContent,
             subjective: valSubjective.textContent,
             objective: valObjective.textContent,
             assessment: valAssessment.textContent,
-            plan: valPlan.textContent
+            plan: valPlan.textContent,
+            prescriptions: prescriptions
         };
 
         if (currentEncounterId) {
@@ -202,18 +214,19 @@ if (saveNotesBtn) {
 
                 const result = await response.json();
                 if (result.success) {
-                    saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
+                    saveNotesBtn.innerHTML = '<span class="icon"></span> Saved';
                     cdsHistory = [];
+                    window.triggerDigitallySignedState();
                     setTimeout(() => {
-                        saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                        saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
                     }, 2000);
                 } else {
                     alert('Error updating consultation: ' + result.message);
-                    saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                    saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
                 }
             } catch (err) {
                 alert('Failed to execute update sequence pipeline.');
-                saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
             } finally {
                 saveNotesBtn.disabled = false;
             }
@@ -221,7 +234,7 @@ if (saveNotesBtn) {
             try {
                 saveNotesBtn.disabled = true;
                 saveNotesBtn.innerHTML = 'Saving...';
-                
+
                 const response = await fetch(`http://127.0.0.1:8000/encounter/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -240,19 +253,20 @@ if (saveNotesBtn) {
 
                     saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
                     cdsHistory = [];
-                    
+                    window.triggerDigitallySignedState();
+
                     if (typeof pollQueue === 'function') pollQueue();
 
                     setTimeout(() => {
-                        saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                        saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
                     }, 2000);
                 } else {
                     alert('Error creating consultation: ' + result.message);
-                    saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                    saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
                 }
             } catch (err) {
                 alert('Failed to create new manual consultation.');
-                saveNotesBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+                saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
             } finally {
                 saveNotesBtn.disabled = false;
             }
@@ -301,7 +315,7 @@ async function askClinicalBrain(question) {
         addChatBubble(aiMarkdown, false, true);
 
     } catch (err) {
-        addChatBubble('❌ CDS server pipeline fallback connection error.', false);
+        addChatBubble(' CDS server pipeline fallback connection error.', false);
     } finally {
         cdsLoading.classList.add('hidden');
     }
@@ -328,7 +342,7 @@ function addChatBubble(text, isUser = false, isHtml = false) {
         if (!isUser) {
             const btn = document.createElement('button');
             btn.className = 'copy-ehr-btn';
-            btn.innerHTML = '📋 Copy';
+            btn.innerHTML = 'Copy';
             btn.onclick = () => { navigator.clipboard.writeText(bubble.innerText); };
             bubble.appendChild(btn);
         }
@@ -354,18 +368,18 @@ async function fetchAndRenderHistory() {
     try {
         let url = `http://127.0.0.1:8000/doctor/${userId}/patients`;
         const filterByActive = currentPatientId && activeHistoryTab === 'current';
-        
+
         if (filterByActive) {
             url = `http://127.0.0.1:8000/patient/${currentPatientId}/history?doctor_id=${userId}`;
         }
-        
+
         const response = await fetch(url);
-        
+
         if (response.status === 403) {
             historyList.innerHTML = '<p class="error">Access Denied: You do not have active consultation assignment or historical relationship for this patient\'s records.</p>';
             return;
         }
-        
+
         const data = await response.json();
         const encounters = data.patients || data.encounters || [];
         loadedEncounters = encounters.map(e => ({
@@ -373,7 +387,7 @@ async function fetchAndRenderHistory() {
             encounter_id: e.encounter_id,
             patient_name: e.patient_name || valName.textContent
         }));
-        
+
         historyList.innerHTML = '';
 
         if (encounters.length === 0) {
@@ -419,7 +433,7 @@ async function fetchAndRenderHistory() {
                 <div style="padding: 1.2rem; background: rgba(255, 255, 255, 0.03); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.3s;"
                      onclick="togglePatientConsultations('${consContainerId}')">
                     <span style="font-weight: 700; font-size: 1.15rem; color: var(--primary-color); display: flex; align-items: center; gap: 8px;">
-                        👤 ${patientName}
+                         ${patientName}
                     </span>
                     <span id="arrow-${consContainerId}" style="font-size: 0.9rem; color: #86868b; transition: transform 0.3s; font-weight: 600;">▼ Expand (${pEncounters.length} visit${pEncounters.length > 1 ? 's' : ''})</span>
                 </div>
@@ -427,7 +441,7 @@ async function fetchAndRenderHistory() {
                 <div id="${consContainerId}" style="display: none; padding: 1.2rem; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.1);">
                     ${patientDoctors.length > 0 ? `
                         <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: rgba(0, 168, 150, 0.15); border-radius: 8px; border: 1px solid rgba(0, 168, 150, 0.2); color: #00a896; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-                            🩺 Treating Practitioners: ${patientDoctors.join(', ')}
+                             Treating Practitioners: ${patientDoctors.join(', ')}
                         </div>
                     ` : ''}
                     <div id="cons-rows-${pIdSafe}" style="display: flex; flex-direction: column; gap: 1rem;">
@@ -457,16 +471,16 @@ async function fetchAndRenderHistory() {
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; cursor: pointer;"
                          onclick="toggleConsultationDetails('notes-${p.encounter_id}', this)">
                         <div style="text-align: left; font-size: 0.95rem; font-weight: 600; color: #ffffff; display: flex; align-items: center; gap: 6px;">
-                            📅 Consultation on ${formattedDate} <span style="font-size: 0.85rem; color: #86868b; font-weight: 500;">(Treated by ${doctorName})</span>
+                             Consultation on ${formattedDate} <span style="font-size: 0.85rem; color: #86868b; font-weight: 500;">(Treated by ${doctorName})</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem; flex-shrink: 0;" onclick="event.stopPropagation();">
                             <button onclick="generateCertificate(${p.encounter_id})" class="btn btn-secondary"
                                 style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
-                                📄 MC
+                                 MC
                             </button>
                             <button onclick="toggleInlineEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
                                 style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
-                                ✏️ Edit Note
+                                 Edit Note
                             </button>
                         </div>
                     </div>
@@ -500,7 +514,7 @@ if (historyTabCurrent && historyTabPast) {
 
 historyBtn.addEventListener('click', async () => {
     historyModal.classList.remove('hidden');
-    
+
     if (currentPatientId) {
         if (historyFilterContainer) historyFilterContainer.classList.remove('hidden');
         activeHistoryTab = 'current';
@@ -565,7 +579,7 @@ window.toggleInlineEdit = async function (encounterId, docId, btnElement) {
         }
     } else {
         cells.forEach(cell => cell.setAttribute('contenteditable', 'true'));
-        btnElement.innerHTML = '💾 Save Note';
+        btnElement.innerHTML = ' Save Note';
         btnElement.style.color = 'white';
         btnElement.style.background = '#28a745';
         if (notesContainer.style.display === 'none') notesContainer.style.display = 'block';
@@ -595,23 +609,23 @@ window.generateCertificate = function (encounterId) {
         alert("Encounter not found.");
         return;
     }
-    
+
     activeMcEncounterId = encounterId;
-    
+
     let notes = {};
     try {
         notes = JSON.parse(encounter.structured_notes_json);
-    } catch (e) {}
+    } catch (e) { }
 
     mcPatientName.value = encounter.patient_name || 'Unknown Patient';
-    
+
     const today = new Date().toISOString().substring(0, 10);
     const tomorrow = new Date(Date.now() + 86400000).toISOString().substring(0, 10);
     mcStartDate.value = today;
     mcEndDate.value = tomorrow;
-    
+
     mcReason.value = notes.assessment && notes.assessment !== '--' ? notes.assessment : 'Medical Illness';
-    
+
     historyModal.classList.add('hidden');
     mcModal.classList.remove('hidden');
 };
@@ -636,7 +650,7 @@ if (downloadMcBtn) {
 
         const start = new Date(startDateVal);
         const end = new Date(endDateVal);
-        
+
         if (end < start) {
             alert("End date cannot be prior to start date.");
             return;
@@ -649,17 +663,17 @@ if (downloadMcBtn) {
         const formattedStart = start.toLocaleDateString('en-US', options);
         const formattedEnd = end.toLocaleDateString('en-US', options);
         const formattedVisit = new Date(encounter.created_at).toLocaleDateString('en-US', options);
-        
+
         let notes = {};
         try {
             notes = JSON.parse(encounter.structured_notes_json);
-        } catch (e) {}
+        } catch (e) { }
 
         // Fetch Doctor Profile to display Registration/ID number & correct names
         let doctorIdNumber = 'PR-88291-A';
         let docFirstName = localStorage.getItem('first_name') || 'Mark';
         let docLastName = localStorage.getItem('last_name') || 'Schrieber';
-        
+
         try {
             const drProfileResponse = await fetch(`http://127.0.0.1:8000/doctor/${userId}/profile`);
             const profileData = await drProfileResponse.json();
@@ -684,7 +698,7 @@ if (downloadMcBtn) {
 
         const element = document.createElement('div');
         element.style.padding = '35px';
-        element.style.fontFamily = "'Outfit', 'Inter', sans-serif";
+        element.style.fontFamily = "'DM Serif Display', serif";
         element.style.color = '#1e1e1e';
         element.style.border = '6px double #1a365d';
         element.style.width = '680px';
@@ -697,7 +711,7 @@ if (downloadMcBtn) {
             <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a365d; padding-bottom: 15px; margin-bottom: 25px;">
                 <div style="display: flex; align-items: center; gap: 15px;">
                     <!-- Official System Logo (loaded as inline base64 to avoid local security errors) -->
-                    <img src="${window.SYSTEM_LOGO_BASE64}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <img src="${window.SYSTEM_LOGO_BASE64}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: contain; flex-shrink: 0; background-color: transparent; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
                     <div>
                         <h1 style="margin: 0; font-size: 26px; color: #1a365d; text-transform: uppercase; letter-spacing: 1px; font-weight: 700;">Health Sync Clinic</h1>
                         <p style="margin: 3px 0 0 0; font-size: 11px; color: #4a5568; font-weight: 500;">12, Jalan Sultan Ismail, Kuala Lumpur, Malaysia</p>
@@ -706,7 +720,7 @@ if (downloadMcBtn) {
                 </div>
                 <div style="text-align: right;">
                     <h2 style="margin: 0; font-size: 18px; color: #2b6cb0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Medical Certificate</h2>
-                    <p style="margin: 3px 0 0 0; font-size: 11px; color: #718096; font-family: monospace;">Serial No: HS-MC-${encounter.encounter_id}-${Math.floor(1000 + Math.random() * 9000)}</p>
+                    <p style="margin: 3px 0 0 0; font-size: 11px; color: #718096; font-family: 'DM Serif Display', serif;">Serial No: HS-MC-${encounter.encounter_id}-${Math.floor(1000 + Math.random() * 9000)}</p>
                 </div>
             </div>
 
@@ -723,7 +737,7 @@ if (downloadMcBtn) {
                     </tr>
                     <tr>
                         <td style="padding: 8px 12px; color: #4a5568; font-weight: 600;">Identification:</td>
-                        <td style="padding: 8px 12px; border-bottom: 1px solid #cbd5e0; color: #1e1e1e; font-family: monospace;">${notes.ic_number || 'Patient Identity Verified'}</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid #cbd5e0; color: #1e1e1e; font-family: 'DM Serif Display', serif;">${notes.ic_number || 'Patient Identity Verified'}</td>
                     </tr>
                 </table>
 
@@ -752,7 +766,7 @@ if (downloadMcBtn) {
                     <p style="margin: 2px 0 0 0; font-size: 11px; color: #718096; font-style: italic;">Health Sync EHR Verified Scribe</p>
                 </div>
                 <div style="text-align: center; width: 220px; display: flex; flex-direction: column; align-items: center;">
-                    <div style="font-family: 'Brush Script MT', cursive, sans-serif; font-size: 32px; color: #2b6cb0; margin-bottom: -8px; transform: rotate(-3deg); font-style: italic; letter-spacing: 1px;">
+                    <div style="font-family: 'DM Serif Display', serif; font-size: 26px; color: #2b6cb0; margin-bottom: -8px; transform: rotate(-3deg); font-style: italic; letter-spacing: 1px;">
                         Dr. ${docLastName || 'Mark'}
                     </div>
                     <div style="border-bottom: 2px solid #4a5568; margin-bottom: 6px; width: 100%;"></div>
@@ -762,30 +776,30 @@ if (downloadMcBtn) {
         `;
 
         const opt = {
-            margin:       10,
-            filename:     `HealthSync_MC_${patientName.replace(/\s+/g, '_')}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            margin: 10,
+            filename: `HealthSync_MC_${patientName.replace(/\s+/g, '_')}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
         try {
             downloadMcBtn.disabled = true;
-            downloadMcBtn.innerText = '⚙️ Generating PDF...';
-            
+            downloadMcBtn.innerText = ' Generating PDF...';
+
             await html2pdf().from(element).set(opt).save();
-            
-            downloadMcBtn.innerText = '✅ Download Complete';
+
+            downloadMcBtn.innerText = ' Download Complete';
             setTimeout(() => {
                 downloadMcBtn.disabled = false;
-                downloadMcBtn.innerText = '📥 Download MC PDF';
+                downloadMcBtn.innerText = ' Download MC PDF';
                 mcModal.classList.add('hidden');
                 historyModal.classList.remove('hidden');
             }, 1500);
         } catch (e) {
             alert("Failed to render PDF: " + e);
             downloadMcBtn.disabled = false;
-            downloadMcBtn.innerText = '📥 Download MC PDF';
+            downloadMcBtn.innerText = ' Download MC PDF';
         }
     });
 }
@@ -821,13 +835,22 @@ window.formatJsonStr = function (jsonStr) {
         const obj = JSON.parse(jsonStr);
         let tableHtml = '<table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem; background: white; border-radius: 8px; overflow: hidden;"><tbody>';
         for (const [key, value] of Object.entries(obj)) {
-            // FIX: Changed from key.startswith to proper native camelCase key.startsWith
             if (key.startsWith('_')) continue;
             const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            
+            let valText = '';
+            if (key === 'prescriptions' && Array.isArray(value)) {
+                valText = value.map(p => `${p.drug} ${p.dosage} - ${p.frequency} (${p.duration})`).join(', ') || 'None';
+            } else if (typeof value === 'object' && value !== null) {
+                valText = JSON.stringify(value);
+            } else {
+                valText = value || 'N/A';
+            }
+
             tableHtml += `
                 <tr style="border-bottom: 1px solid #e5e5e5;">
                     <th style="padding: 0.8rem 1rem; text-align: left; width: 30%; color: #00a896; background: rgba(0, 168, 150, 0.05);">${formattedKey}</th>
-                    <td class="history-cell" data-key="${key}" style="padding: 0.8rem 1rem; color: #1d1d1f;">${value || 'N/A'}</td>
+                    <td class="history-cell" data-key="${key}" style="padding: 0.8rem 1rem; color: #1d1d1f;">${valText}</td>
                 </tr>`;
         }
         tableHtml += '</tbody></table>';
@@ -842,13 +865,18 @@ async function pollQueue() {
     try {
         const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/on-hold`);
         const data = await response.json();
-        
+
+        const sidebarList = document.getElementById('sidebar-queue-list');
+
         if (data.patients && data.patients.length > 0) {
             queueRedDot.classList.remove('hidden');
             queueSection.classList.remove('hidden');
-            
+
             queueList.innerHTML = '';
+            if (sidebarList) sidebarList.innerHTML = '';
+
             data.patients.forEach(p => {
+                // Render to dropdown list
                 const item = document.createElement('div');
                 item.className = 'queue-patient-item';
                 item.innerHTML = `
@@ -856,18 +884,37 @@ async function pollQueue() {
                         <span class="queue-patient-name">${p.patient_name}</span>
                         <span class="queue-patient-meta">${p.age} y/o, ${p.gender} | ID: ${p.ic_number}</span>
                     </div>
-                    <span style="font-size: 0.9rem; color: var(--primary-color);">➡️</span>
                 `;
                 item.addEventListener('click', (e) => {
                     e.stopPropagation();
                     loadPatient(p);
                 });
                 queueList.appendChild(item);
+
+                // Render to sidebar list
+                if (sidebarList) {
+                    const sbItem = document.createElement('div');
+                    sbItem.className = 'queue-patient-item';
+                    sbItem.innerHTML = `
+                        <div class="queue-patient-info">
+                            <span class="queue-patient-name">${p.patient_name}</span>
+                            <span class="queue-patient-meta">${p.age} y/o, ${p.gender} | ID: ${p.ic_number}</span>
+                        </div>
+                    `;
+                    sbItem.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        loadPatient(p);
+                    });
+                    sidebarList.appendChild(sbItem);
+                }
             });
         } else {
             queueRedDot.classList.add('hidden');
             queueSection.classList.add('hidden');
             queueList.innerHTML = '';
+            if (sidebarList) {
+                sidebarList.innerHTML = '<p class="placeholder-text">No patients in queue.</p>';
+            }
         }
     } catch (err) {
         console.error('Error polling doctor queue:', err);
@@ -877,27 +924,45 @@ async function pollQueue() {
 function loadPatient(patient) {
     currentPatientId = patient.id;
     active_patient_details = patient;
-    
+
     // Close the dropdown menu
     headerDropdown.classList.remove('show');
     headerDropdown.classList.add('hidden');
-    
+
     // Populate demographic fields and lock them
     valName.textContent = patient.patient_name;
     valName.setAttribute('contenteditable', 'false');
-    
+
     valAge.textContent = patient.age;
     valAge.setAttribute('contenteditable', 'false');
-    
+
     valGender.textContent = patient.gender;
     valGender.setAttribute('contenteditable', 'false');
-    
+
+    // Populate the demographics horizontal safety banner
+    const demoBanner = document.getElementById('demographics-banner');
+    if (demoBanner) {
+        document.getElementById('banner-name').textContent = patient.patient_name;
+        document.getElementById('banner-age').textContent = patient.age;
+        document.getElementById('banner-gender').textContent = patient.gender;
+        document.getElementById('banner-ic').textContent = patient.ic_number || 'N/A';
+        
+        // Safety alerts defaults (editable by clinician in contenteditable spans)
+        document.getElementById('banner-allergies').textContent = "Allergies: None";
+        document.getElementById('banner-vitals').textContent = "BP: 120/80 | HR: 72";
+        
+        demoBanner.classList.remove('hidden');
+    }
+
     // Clear clinical note fields for fresh consultation
     valSubjective.textContent = '--';
     valObjective.textContent = '--';
     valAssessment.textContent = '--';
     valPlan.textContent = '--';
-    
+
+    // Reset prescription builder and signature state
+    window.unlockConsultationWorkspace();
+
     // Clear active encounter
     currentEncounterId = null;
     currentDocId = null;
@@ -906,9 +971,88 @@ function loadPatient(patient) {
         saveBtn.classList.remove('hidden');
         saveBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
     }
-    
+
     alert(`Active consultation assigned for: ${patient.patient_name}`);
 }
+
+// Sidebar Toggle Event Listener
+const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+const queueSidebar = document.getElementById('queue-sidebar');
+if (toggleSidebarBtn && queueSidebar) {
+    toggleSidebarBtn.addEventListener('click', () => {
+        queueSidebar.classList.toggle('collapsed');
+    });
+}
+
+// Prescription Helper functions
+window.addPrescriptionRow = function(drugName = '', dosage = '', frequency = '', duration = '') {
+    const list = document.getElementById('prescription-list');
+    if (!list) return;
+
+    const row = document.createElement('div');
+    row.className = 'prescription-row';
+    row.innerHTML = `
+        <input type="text" placeholder="e.g. Amoxicillin" value="${drugName}" class="presc-drug">
+        <input type="text" placeholder="e.g. 500mg" value="${dosage}" class="presc-dosage">
+        <input type="text" placeholder="e.g. BD (Twice daily)" value="${frequency}" class="presc-freq">
+        <input type="text" placeholder="e.g. 7 Days" value="${duration}" class="presc-duration">
+        <button class="delete-presc-btn" onclick="this.parentElement.remove()" type="button" title="Delete">✕</button>
+    `;
+    list.appendChild(row);
+};
+
+const addPrescBtn = document.getElementById('add-prescription-btn');
+if (addPrescBtn) {
+    addPrescBtn.addEventListener('click', () => {
+        window.addPrescriptionRow();
+    });
+}
+
+window.triggerDigitallySignedState = function() {
+    const overlay = document.getElementById('signature-stamp-overlay');
+    if (overlay) {
+        const stampDate = document.getElementById('signature-stamp-date');
+        if (stampDate) {
+            stampDate.textContent = new Date().toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+        }
+        overlay.classList.remove('hidden');
+    }
+    // Lock note fields
+    ['val-subjective', 'val-objective', 'val-assessment', 'val-plan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('contenteditable', 'false');
+    });
+    // Lock prescription inputs
+    document.querySelectorAll('.prescription-row input').forEach(input => {
+        input.disabled = true;
+    });
+    document.querySelectorAll('.delete-presc-btn').forEach(btn => {
+        btn.style.display = 'none';
+    });
+    const addPrescBtnEl = document.getElementById('add-prescription-btn');
+    if (addPrescBtnEl) addPrescBtnEl.style.display = 'none';
+};
+
+window.unlockConsultationWorkspace = function() {
+    const overlay = document.getElementById('signature-stamp-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    // Unlock note fields
+    ['val-subjective', 'val-objective', 'val-assessment', 'val-plan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('contenteditable', 'true');
+    });
+    // Enable prescription additions
+    const addPrescBtnEl = document.getElementById('add-prescription-btn');
+    if (addPrescBtnEl) addPrescBtnEl.style.display = 'inline-flex';
+    
+    // Clear prescriptions
+    const prescList = document.getElementById('prescription-list');
+    if (prescList) prescList.innerHTML = '';
+};
 
 // Start queue polling
 pollQueue();

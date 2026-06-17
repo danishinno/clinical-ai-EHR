@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
-from faster_whisper import WhisperModel
+import mlx_whisper
 import numpy as np
 import ollama
 import json
@@ -13,12 +13,12 @@ import asyncio
 from database import init_db, query_db
 from datetime import datetime
 
-# Initialize database schema mapping
+#database schema mapping
 init_db()
 
 chroma_client = chromadb.PersistentClient(path="./medical_knowledge")
 collection = chroma_client.get_or_create_collection(name="clinical_docs")
-print("✅ ChromaDB Memory initialized and ready.")
+print("ChromaDB Memory initialized and ready.")
 
 app = FastAPI()
 
@@ -30,9 +30,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-print("Loading Whisper model into memory...")
-whisper_model = WhisperModel("medium", device="cpu", compute_type="int8")
-print("Whisper model loaded successfully!")
+# Remove global Whisper model initialization since mlx-whisper handles model loading dynamically
 
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
@@ -116,14 +114,19 @@ async def websocket_endpoint(websocket: WebSocket):
     audio_buffer = np.array([], dtype=np.float32)
 
     def run_transcribe(buffer_data):
-        segments_gen, info = whisper_model.transcribe(
+        # 1. Volume Noise Gate (RMS Energy threshold)
+        rms = np.sqrt(np.mean(buffer_data**2))
+        print(f" Audio Chunk RMS Energy: {rms:.6f}")
+        if rms < 0.003:
+            return {"text": "", "segments": []}
+
+        result = mlx_whisper.transcribe(
             buffer_data,
-            beam_size=3,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500),
-            initial_prompt="A medical consultation. Patient: Saya sakit dada. Doctor: How long have you had this chest pain?"
+            path_or_hf_repo="mlx-community/whisper-small-mlx-8bit",
+            temperature=0.0,
+            initial_prompt="A clinical medical consultation. Patient: Saya sakit dada. Doctor: How long have you had this chest pain? Keywords: stable angina, chest discomfort, tightness, squeezing, physical exertion, shortness of breath, high cholesterol, heart attack."
         )
-        return list(segments_gen), info
+        return result
 
     try:
         while True:
@@ -133,20 +136,26 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if len(audio_buffer) >= 32000:
                 loop = asyncio.get_running_loop()
-                segments, info = await loop.run_in_executor(
+                result = await loop.run_in_executor(
                     None,
                     run_transcribe,
                     audio_buffer
                 )
                 
-                transcript_chunk = ""
-                for segment in segments:
-                    if segment.text.strip():
-                        transcript_chunk += segment.text + " "
+                # 2. No-Speech Probability Segment Filtering
+                segments = result.get("segments", [])
+                valid_texts = []
+                for seg in segments:
+                    no_speech_prob = seg.get("no_speech_prob", 0.0)
+                    # Ignore segments with high no-speech probability to prevent silent hallucinations
+                    if no_speech_prob < 0.65:
+                        valid_texts.append(seg.get("text", "").strip())
+                
+                transcript_chunk = " ".join(valid_texts).strip()
 
-                if transcript_chunk.strip():
-                    print(f"🗣️ Live Heard: {transcript_chunk.strip()}")
-                    await websocket.send_text(transcript_chunk.strip())
+                if transcript_chunk:
+                    print(f"🗣️ Live Heard: {transcript_chunk}")
+                    await websocket.send_text(transcript_chunk)
                 
                 audio_buffer = np.array([], dtype=np.float32)
 
@@ -158,9 +167,9 @@ async def websocket_endpoint(websocket: WebSocket):
 # PHASE 2: CLINICAL ENCOUNTER EXTRACTION
 @app.post("/process-dictation")
 async def process_dictation(query: ClinicalQuery):
-    print(f"\n🎙️ -------------------------------------------------------------")
-    print(f"🎙️ [Dictation Scribe] Processing transcript for Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
-    print(f"🎙️ -------------------------------------------------------------")
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Dictation Scribe] Processing transcript for Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
+    print(f" -------------------------------------------------------------")
     
     # Check if a pre-assigned patient is active
     active_patient = None
@@ -186,7 +195,7 @@ async def process_dictation(query: ClinicalQuery):
     """
 
     try:
-        print("🧠 [Dictation Scribe] Calling medllama2 for JSON SOAP note extraction...")
+        print("[Dictation Scribe] Calling medllama2 for JSON SOAP note extraction...")
         response = ollama.chat(
             model='medllama2',
             messages=[
@@ -228,14 +237,14 @@ async def process_dictation(query: ClinicalQuery):
         doc_id = str(uuid.uuid4())
         document_text = f"Raw Transcript: {query.transcript}\n\nStructured Notes: {json.dumps(extracted_notes)}"
 
-        print("💾 [Dictation Scribe] Indexing encounter documents in ChromaDB collection...")
+        print(" [Dictation Scribe] Indexing encounter documents in ChromaDB collection...")
         collection.add(
             documents=[document_text],
             metadatas=[{"patient_name": patient_name, "type": "encounter"}],
             ids=[doc_id]
         )
 
-        print("💾 [Dictation Scribe] Inserting new consultation row in encounters table...")
+        print(" [Dictation Scribe] Inserting new consultation row in encounters table...")
         encounter_id = query_db(
             "INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (patient_id, query.doctor_id, query.transcript, json.dumps(extracted_notes), doc_id, datetime.now().isoformat()),
@@ -245,18 +254,18 @@ async def process_dictation(query: ClinicalQuery):
         extracted_notes["_patient_id"] = patient_id
         extracted_notes["_encounter_id"] = encounter_id
         extracted_notes["_doc_id"] = doc_id
-        print(f"✅ [Dictation Scribe] Done! Extracted SOAP notes for: {patient_name} (ID: {patient_id}) in encounter {encounter_id}")
+        print(f" [Dictation Scribe] Done! Extracted SOAP notes for: {patient_name} (ID: {patient_id}) in encounter {encounter_id}")
         return extracted_notes
 
     except Exception as e:
-        print(f"❌ [Dictation Scribe] Error during extraction: {e}")
+        print(f" [Dictation Scribe] Error during extraction: {e}")
         return {"error": "Failed to process data with medllama2."}
 
 @app.put("/encounter/{encounter_id}/notes")
 async def update_encounter_notes(encounter_id: int, query: UpdateNotesQuery):
-    print(f"\n✏️ -------------------------------------------------------------")
-    print(f"✏️ [Encounter Update] Edit request for Encounter ID: {encounter_id} | Patient Name: {query.patient_name}")
-    print(f"✏️ -------------------------------------------------------------")
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Encounter Update] Edit request for Encounter ID: {encounter_id} | Patient Name: {query.patient_name}")
+    print(f" -------------------------------------------------------------")
     try:
         notes_to_save = {k: v for k, v in query.updated_notes.items() if not k.startswith('_')}
 
@@ -277,17 +286,17 @@ async def update_encounter_notes(encounter_id: int, query: UpdateNotesQuery):
             except Exception as chroma_err:
                 print(f"⚠️ [Encounter Update] ChromaDB update error: {chroma_err}")
 
-        print(f"💾 [Encounter Update] Notes updated successfully. ORIGINAL consultation timeframe preserved.")
+        print(f" [Encounter Update] Notes updated successfully. ORIGINAL consultation timeframe preserved.")
         return {"success": True, "message": "Encounter notes updated successfully."}
     except Exception as e:
-        print(f"❌ [Encounter Update] Edit failed: {e}")
+        print(f" [Encounter Update] Edit failed: {e}")
         return {"success": False, "message": str(e)}
 
 @app.post("/encounter/save")
 async def save_encounter(query: SaveEncounterQuery):
-    print(f"\n📝 -------------------------------------------------------------")
-    print(f"📝 [Manual Save] Doctor ID {query.doctor_id} requested manual consultation save for Patient ID: {query.patient_id}")
-    print(f"📝 -------------------------------------------------------------")
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Manual Save] Doctor ID {query.doctor_id} requested manual consultation save for Patient ID: {query.patient_id}")
+    print(f" -------------------------------------------------------------")
     try:
         patient_id = query.patient_id
         active_patient = None
@@ -324,23 +333,23 @@ async def save_encounter(query: SaveEncounterQuery):
         document_text = f"Raw Transcript: {query.transcript or 'Manually entered clinical note.'}\n\nStructured Notes: {json.dumps(notes_to_save)}"
 
         try:
-            print("💾 [Manual Save] Adding record to ChromaDB guideline pipeline collection...")
+            print(" [Manual Save] Adding record to ChromaDB guideline pipeline collection...")
             collection.add(
                 documents=[document_text],
                 metadatas=[{"patient_name": patient_name, "type": "encounter"}],
                 ids=[doc_id]
             )
         except Exception as chroma_err:
-            print(f"⚠️ [Manual Save] ChromaDB write error: {chroma_err}")
+            print(f" [Manual Save] ChromaDB write error: {chroma_err}")
 
-        print("💾 [Manual Save] Inserting new consultation row in encounters database table...")
+        print(" [Manual Save] Inserting new consultation row in encounters database table...")
         encounter_id = query_db(
             "INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (patient_id, query.doctor_id, query.transcript or "Manually entered clinical note.", json.dumps(notes_to_save), doc_id, datetime.now().isoformat()),
             commit=True
         )
 
-        print(f"✅ [Manual Save] Done! Encounter {encounter_id} saved successfully for Patient: {patient_name} (ID: {patient_id})")
+        print(f" [Manual Save] Done! Encounter {encounter_id} saved successfully for Patient: {patient_name} (ID: {patient_id})")
         return {
             "success": True,
             "message": "Encounter saved successfully.",
@@ -350,7 +359,7 @@ async def save_encounter(query: SaveEncounterQuery):
         }
 
     except Exception as e:
-        print(f"❌ [Manual Save] Failed to save encounter manually: {e}")
+        print(f" [Manual Save] Failed to save encounter manually: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -371,10 +380,10 @@ async def ask_guidelines(query: GuidelineQuery):
     if not question_text:
         return {"answer": "Error: Empty question provided."}
 
-    print(f"\n🧠 -------------------------------------------------------------")
-    print(f"🧠 [Clinical Brain] Received query: '{question_text}'")
-    print(f"🧠 [Clinical Brain] Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
-    print(f"🧠 -------------------------------------------------------------")
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Clinical Brain] Received query: '{question_text}'")
+    print(f" [Clinical Brain] Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
+    print(f" -------------------------------------------------------------")
 
     doctor_profile = None
     if query.doctor_id:
@@ -384,7 +393,7 @@ async def ask_guidelines(query: GuidelineQuery):
         )
         if doc_rows:
             doctor_profile = doc_rows[0]
-            print(f"👩‍⚕️ [Clinical Brain] Active Clinician: Dr. {doctor_profile['first_name']} {doctor_profile['last_name']} ({doctor_profile['specialty']})")
+            print(f" [Clinical Brain] Active Clinician: Dr. {doctor_profile['first_name']} {doctor_profile['last_name']} ({doctor_profile['specialty']})")
 
     patient_profile = None
     if query.patient_id:
@@ -394,13 +403,13 @@ async def ask_guidelines(query: GuidelineQuery):
         )
         if pat_rows:
             patient_profile = pat_rows[0]
-            print(f"👤 [Clinical Brain] Active Patient: {patient_profile['patient_name']} (Age: {patient_profile['age']}, Gender: {patient_profile['gender']})")
+            print(f" [Clinical Brain] Active Patient: {patient_profile['patient_name']} (Age: {patient_profile['age']}, Gender: {patient_profile['gender']})")
 
     encounters = []
     my_patients_data = "No patients found for this doctor."
 
     if query.doctor_id:
-        print("🔍 [Clinical Brain] Loading authorized encounters and active queue patients...")
+        print(" [Clinical Brain] Loading authorized encounters and active queue patients...")
         # Fetch encounters for all patients assigned to this doctor or treated by them in the past
         # Includes the treating doctor's names
         encounters = query_db(
@@ -467,12 +476,12 @@ async def ask_guidelines(query: GuidelineQuery):
         my_patients_data = "\n".join(lines) if lines else "No patients found for this doctor."
 
     if any(phrase in lower_q for phrase in ["list my patients", "who are my patients"]):
-        print("🔎 [Clinical Brain] Classified intent: ADMIN (listing patients)")
-        print("🚀 [Clinical Brain] Returning patient lists directly.")
+        print(" [Clinical Brain] Classified intent: ADMIN (listing patients)")
+        print(" [Clinical Brain] Returning patient lists directly.")
         return {"answer": f"**Your Registered Patients Visit Log:**\n\n{my_patients_data}"}
 
     intent = classify_intent(question_text)
-    print(f"🔎 [Clinical Brain] Classified intent: {intent}")
+    print(f" [Clinical Brain] Classified intent: {intent}")
 
     if intent == "ADMIN":
     # -----------------------------------------------------------------
@@ -480,7 +489,7 @@ async def ask_guidelines(query: GuidelineQuery):
         Note: Patients marked with '[ACTIVE]' are active patients in the queue. Patients marked with '[PAST]' are past patients."""
         gemma_user_prompt = f"PATIENTS:\n{my_patients_data}\n\nQUESTION:\n{question_text}"
         try:
-            print("🚀 [Clinical Brain] Dispatching ADMIN query to gemma:2b model...")
+            print(" [Clinical Brain] Dispatching ADMIN query to gemma:2b model...")
             response = ollama.chat(model='gemma:2b', messages=[
                 {'role': 'system', 'content': gemma_system_prompt},
                 {'role': 'user', 'content': gemma_user_prompt}
@@ -490,31 +499,31 @@ async def ask_guidelines(query: GuidelineQuery):
             # Check for generic refusals or model confusion in the response
             refusal_keywords = ["cannot", "not provide", "no information", "don't have info", "unable to", "does not contain"]
             if any(ref in content.lower() for ref in refusal_keywords):
-                print("⚠️ [Clinical Brain] gemma:2b returned a refusal, falling back to llama3 model...")
+                print(" [Clinical Brain] gemma:2b returned a refusal, falling back to llama3 model...")
                 response = ollama.chat(model='llama3', messages=[
                     {'role': 'system', 'content': gemma_system_prompt},
                     {'role': 'user', 'content': gemma_user_prompt}
                 ])
                 content = response['message']['content'].strip()
                 
-            print("✅ [Clinical Brain] ADMIN response generated successfully.")
+            print(" [Clinical Brain] ADMIN response generated successfully.")
             return {"answer": content}
         except Exception as e:
-            print(f"❌ [Clinical Brain] Gemma ADMIN error: {e}, falling back to llama3...")
+            print(f" [Clinical Brain] Gemma ADMIN error: {e}, falling back to llama3...")
             try:
                 response = ollama.chat(model='llama3', messages=[
                     {'role': 'system', 'content': gemma_system_prompt},
                     {'role': 'user', 'content': gemma_user_prompt}
                 ])
-                print("✅ [Clinical Brain] llama3 fallback ADMIN response generated successfully.")
+                print(" [Clinical Brain] llama3 fallback ADMIN response generated successfully.")
                 return {"answer": response['message']['content'].strip()}
             except Exception as le:
-                print(f"❌ [Clinical Brain] llama3 fallback ADMIN failed: {le}")
+                print(f" [Clinical Brain] llama3 fallback ADMIN failed: {le}")
                 return {"answer": f"System Error: {str(le)}"}
 
     current_patient_history = []
     if query.patient_id:
-        print(f"🔍 [Clinical Brain] Loading dedicated past history for active patient ID {query.patient_id}...")
+        print(f" [Clinical Brain] Loading dedicated past history for active patient ID {query.patient_id}...")
         current_patient_history = query_db(
             """SELECT e.id, e.patient_id, p.patient_name, e.created_at, e.structured_notes_json, e.doc_id,
                       u.first_name as doc_first, u.last_name as doc_last
@@ -559,14 +568,14 @@ async def ask_guidelines(query: GuidelineQuery):
 
     guideline_docs = []
     try:
-        print("🔍 [Clinical Brain] Querying ChromaDB guidelines Vector Store...")
+        print(" [Clinical Brain] Querying ChromaDB guidelines Vector Store...")
         results = collection.query(query_texts=[question_text], n_results=5)
         if results['documents']:
             for doc, meta in zip(results['documents'][0], results['metadatas'][0]):
                 if meta and meta.get("type") == "guideline":
                     guideline_docs.append(f"Source: {meta.get('filename')}\n{doc}")
     except Exception as ce:
-        print(f"⚠️ [Clinical Brain] Chroma Query Error: {ce}")
+        print(f" [Clinical Brain] Chroma Query Error: {ce}")
 
     compiled_active_history = "\n\n".join(active_patient_history_docs) if active_patient_history_docs else "No past records found for this active patient."
     compiled_other_history = "\n\n".join(other_patients_history_docs) if other_patients_history_docs else "No historical records for other patients."
@@ -615,14 +624,14 @@ async def ask_guidelines(query: GuidelineQuery):
     messages.append({'role': 'user', 'content': question_text})
 
     try:
-        print("🚀 [Clinical Brain] Dispatching CLINICAL query to llama3 model...")
+        print(" [Clinical Brain] Dispatching CLINICAL query to llama3 model...")
         response = ollama.chat(model='llama3', messages=messages)
-        print("✅ [Clinical Brain] llama3 generation complete.")
+        print(" [Clinical Brain] llama3 generation complete.")
         return {"answer": response['message']['content'].strip()}
     except Exception as e:
-        print(f"⚠️ [Clinical Brain] llama3 connection failed, falling back to medllama2: {e}")
+        print(f" [Clinical Brain] llama3 connection failed, falling back to medllama2: {e}")
         response = ollama.chat(model='medllama2', messages=messages)
-        print("✅ [Clinical Brain] medllama2 fallback generation complete.")
+        print(" [Clinical Brain] medllama2 fallback generation complete.")
         return {"answer": response['message']['content'].strip()}
 
 # PHASE 4: DATE-LOCKED MEDICAL CERTIFICATES (FIXED FOR STRICT COMPLIANCE)
@@ -714,13 +723,13 @@ async def admin_overview():
 
 @app.get("/doctor/{doctor_id}/patients")
 async def get_doctor_patients(doctor_id: str):
-    print(f"\n📋 -------------------------------------------------------------")
-    print(f"📋 [Doctor Patients API] Fetching secure multi-doctor histories for Doctor ID: {doctor_id}")
-    print(f"📋 -------------------------------------------------------------")
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Doctor Patients API] Fetching secure multi-doctor histories for Doctor ID: {doctor_id}")
+    print(f" -------------------------------------------------------------")
     try:
         dr_id = int(doctor_id)
     except (ValueError, TypeError):
-        print(f"⚠️ [Doctor Patients API] Bad Doctor ID format requested: '{doctor_id}'")
+        print(f" [Doctor Patients API] Bad Doctor ID format requested: '{doctor_id}'")
         raise HTTPException(status_code=400, detail="Invalid Doctor ID format.")
 
     # Fetch all encounters across all doctors for patients assigned to this doctor or treated by them in the past
@@ -738,7 +747,7 @@ async def get_doctor_patients(doctor_id: str):
            ORDER BY e.created_at DESC""",
         (dr_id, dr_id)
     )
-    print(f"📋 [Doctor Patients API] Returned {len(encounters)} encounters successfully.")
+    print(f" [Doctor Patients API] Returned {len(encounters)} encounters successfully.")
     return {"patients": encounters}
 
 @app.post("/admin/upload-guideline")
@@ -898,14 +907,14 @@ async def get_doctor_on_hold(doctor_id: int):
 
 @app.get("/patient/{patient_id}/history")
 async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
-    print(f"\n🔍 -------------------------------------------------------------")
-    print(f"🔍 [Patient History API] Fetching full encounter history for Patient ID: {patient_id} requested by Doctor ID: {doctor_id}")
-    print(f"🔍 -------------------------------------------------------------")
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Patient History API] Fetching full encounter history for Patient ID: {patient_id} requested by Doctor ID: {doctor_id}")
+    print(f" -------------------------------------------------------------")
     
     try:
         pat_id = int(patient_id)
     except (ValueError, TypeError):
-        print(f"⚠️ [Patient History API] Bad Patient ID format: '{patient_id}'")
+        print(f" [Patient History API] Bad Patient ID format: '{patient_id}'")
         raise HTTPException(status_code=400, detail="Invalid Patient ID format.")
 
     try:
@@ -914,7 +923,7 @@ async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
         dr_id = None
 
     if dr_id is None:
-        print(f"❌ [Patient History API] Missing or invalid Doctor ID: '{doctor_id}'")
+        print(f" [Patient History API] Missing or invalid Doctor ID: '{doctor_id}'")
         raise HTTPException(status_code=400, detail="Doctor ID is required and must be an integer.")
 
     # Enforce strict safety check:
@@ -925,7 +934,7 @@ async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
     treated = query_db("SELECT id FROM encounters WHERE patient_id = ? AND doctor_id = ?", (pat_id, dr_id), one=True)
     
     if not assigned and not treated:
-        print(f"❌ [Patient History API] Access Denied: Doctor ID {dr_id} has no queue or history link to Patient ID {pat_id}.")
+        print(f" [Patient History API] Access Denied: Doctor ID {dr_id} has no queue or history link to Patient ID {pat_id}.")
         raise HTTPException(
             status_code=403,
             detail="Access Denied: You do not have active consultation assignment or historical relationship for this patient's records."
@@ -941,7 +950,7 @@ async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
         ORDER BY e.created_at DESC
     """, (pat_id,))
     
-    print(f"🔍 [Patient History API] Returned {len(encounters)} encounters successfully.")
+    print(f" [Patient History API] Returned {len(encounters)} encounters successfully.")
     return {"encounters": encounters}
 
 @app.get("/admin/patients-list")

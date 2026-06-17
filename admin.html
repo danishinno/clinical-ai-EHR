@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,25 +9,31 @@
     <style>
         .admin-section {
             margin-bottom: 2rem;
-            background: rgba(255, 255, 255, 0.85); /* Glassy white */
+            background: rgba(255, 255, 255, 0.85);
+            /* Glassy white */
             backdrop-filter: var(--blur-intensity);
             -webkit-backdrop-filter: var(--blur-intensity);
             padding: 2rem;
             border-radius: var(--radius-xl);
             box-shadow: var(--shadow);
-            color: #1d1d1f; /* Dark iOS text */
+            color: #1d1d1f;
+            /* Dark iOS text */
         }
+
         .header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 2rem;
         }
-        .doctor-list, .patient-list {
+
+        .doctor-list,
+        .patient-list {
             list-style: none;
             padding: 0;
             margin: 0;
         }
+
         .doctor-item {
             display: flex;
             justify-content: space-between;
@@ -34,6 +41,7 @@
             padding: 1rem;
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
+
         .patient-card {
             background: rgba(0, 0, 0, 0.05);
             margin: 1rem 0;
@@ -41,6 +49,7 @@
             border-radius: var(--radius-lg);
             border: 1px solid rgba(0, 0, 0, 0.05);
         }
+
         .history-btn {
             background: none;
             border: none;
@@ -48,10 +57,12 @@
             cursor: pointer;
             font-weight: 600;
         }
+
         .history-btn:hover {
             color: #005bb5;
             text-decoration: underline;
         }
+
         .notes-content {
             background: rgba(0, 0, 0, 0.03);
             padding: 1rem;
@@ -59,18 +70,22 @@
             border-radius: var(--radius-sm);
             display: none;
         }
+
         .admin-section .subtext {
-            color: #515154 !important; /* Force dark gray on light background */
+            color: #515154 !important;
+            /* Force dark gray on light background */
         }
     </style>
     <link rel="icon" type="image/png" href="favicon.png">
 </head>
+
 <body>
     <div class="container">
         <div class="header-top">
             <div style="display: flex; align-items: center; gap: 15px;">
-                <img src="logo.png" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: white;">
-                <h1 style="margin: 0;">🛡️ Admin Dashboard</h1>
+                <img src="logo.png?v=2" alt="Logo"
+                    style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: transparent;">
+                <h1 style="margin: 0;"> Admin Dashboard</h1>
             </div>
             <button id="logout-btn" class="btn btn-secondary">Logout</button>
         </div>
@@ -84,9 +99,11 @@
 
         <div class="admin-section">
             <h2>Upload Medical Guidelines</h2>
-            <p class="subtext" style="margin-bottom: 1rem;">Upload PDF or DOCX files for the Clinical Brain to reference.</p>
+            <p class="subtext" style="margin-bottom: 1rem;">Upload PDF or DOCX files for the Clinical Brain to
+                reference.</p>
             <form id="upload-guideline-form" style="display: flex; gap: 1rem; align-items: center;">
-                <input type="file" id="guideline-file" accept=".pdf,.docx" required class="btn" style="background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: #1d1d1f;">
+                <input type="file" id="guideline-file" accept=".pdf,.docx" required class="btn"
+                    style="background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: #1d1d1f;">
                 <button type="submit" class="btn btn-primary" id="upload-btn">Upload Guideline</button>
             </form>
             <div id="upload-status" style="margin-top: 1rem; font-weight: bold;"></div>
@@ -94,12 +111,15 @@
 
         <div class="admin-section">
             <h2>Patient Registration & Consultation Queuing</h2>
-            <p class="subtext" style="margin-bottom: 1.5rem;">Register a new patient or select an existing patient to assign them to a doctor's active queue.</p>
-            
+            <p class="subtext" style="margin-bottom: 1.5rem;">Register a new patient or select an existing patient to
+                assign them to a doctor's active queue.</p>
+
             <!-- Registration Mode Toggle -->
             <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                <button id="mode-new-btn" class="btn btn-primary" type="button" style="flex: 1;">New Registration</button>
-                <button id="mode-returning-btn" class="btn btn-secondary" type="button" style="flex: 1; background: rgba(0,0,0,0.05); color: #1d1d1f;">Returning Patient</button>
+                <button id="mode-new-btn" class="btn btn-primary" type="button" style="flex: 1;">New
+                    Registration</button>
+                <button id="mode-returning-btn" class="btn btn-secondary" type="button"
+                    style="flex: 1; background: rgba(0,0,0,0.05); color: #1d1d1f;">Returning Patient</button>
             </div>
 
             <!-- Patient Queue Form -->
@@ -107,33 +127,45 @@
                 <div id="new-patient-fields" style="display: flex; flex-direction: column; gap: 1rem;">
                     <div style="display: flex; gap: 1rem;">
                         <div style="flex: 2;">
-                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient Full Name</label>
-                            <input type="text" id="reg-name" placeholder="e.g. Ahmad Farhan" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                            <label
+                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient
+                                Full Name</label>
+                            <input type="text" id="reg-name" placeholder="e.g. Ahmad Farhan" required
+                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                         </div>
                         <div style="flex: 1;">
-                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Age</label>
-                            <input type="number" id="reg-age" placeholder="e.g. 29" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                            <label
+                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Age</label>
+                            <input type="number" id="reg-age" placeholder="e.g. 29" required
+                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                         </div>
                     </div>
                     <div style="display: flex; gap: 1rem;">
                         <div style="flex: 1;">
-                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Gender</label>
-                            <select id="reg-gender" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
+                            <label
+                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Gender</label>
+                            <select id="reg-gender" required
+                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
                                 <option value="Male">Male</option>
                                 <option value="Female">Female</option>
                             </select>
                         </div>
                         <div style="flex: 2;">
-                            <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient ID / IC Number (Letters & Numbers Only)</label>
-                            <input type="text" id="reg-ic" placeholder="e.g. 950102145693" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                            <label
+                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient
+                                ID / IC Number (Letters & Numbers Only)</label>
+                            <input type="text" id="reg-ic" placeholder="e.g. 950102145693" required
+                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                         </div>
                     </div>
                 </div>
 
                 <!-- Returning Patient Fields (Hidden initially) -->
                 <div id="returning-patient-fields" class="hidden">
-                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Select Registered Patient</label>
-                    <select id="reg-patient-select" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white; margin-bottom: 1rem;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Select
+                        Registered Patient</label>
+                    <select id="reg-patient-select"
+                        style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white; margin-bottom: 1rem;">
                         <option value="">-- Choose a patient --</option>
                         <!-- Loaded dynamically -->
                     </select>
@@ -141,14 +173,18 @@
 
                 <!-- Doctor Assignment -->
                 <div>
-                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Assign to Doctor</label>
-                    <select id="reg-doctor-select" required style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Assign to
+                        Doctor</label>
+                    <select id="reg-doctor-select" required
+                        style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
                         <option value="">-- Choose a Doctor --</option>
                         <!-- Loaded dynamically -->
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.8rem; margin-top: 0.5rem; font-weight: 600;" id="register-submit-btn">
+                <button type="submit" class="btn btn-primary"
+                    style="width: 100%; padding: 0.8rem; margin-top: 0.5rem; font-weight: 600;"
+                    id="register-submit-btn">
                     Queue Patient for Consultation
                 </button>
             </form>
@@ -157,7 +193,8 @@
 
         <div class="admin-section">
             <h2>Live Consultation Queue</h2>
-            <p class="subtext" style="margin-bottom: 1.5rem;">Patients currently waiting in line. You can re-assign them to another doctor if needed.</p>
+            <p class="subtext" style="margin-bottom: 1.5rem;">Patients currently waiting in line. You can re-assign them
+                to another doctor if needed.</p>
             <div id="live-queue-container" style="display: flex; flex-direction: column; gap: 1rem;">
                 <!-- Live queue lists loaded here -->
                 <p class="placeholder-text" style="padding: 1rem;">No patients currently in queue.</p>
@@ -173,4 +210,5 @@
     </div>
     <script src="admin.js"></script>
 </body>
+
 </html>

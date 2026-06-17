@@ -16,113 +16,190 @@
     <div class="container">
         <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
             <div style="display: flex; align-items: center; gap: 15px;">
-                <img src="logo.png" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: white;">
+                <img src="logo.png?v=2" alt="Logo"
+                    style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: transparent;">
                 <div>
                     <h1 style="margin-bottom: 0;">Health Sync</h1>
                     <p class="subtext" style="margin-top: 0;">Welcome, Dr. <span id="dr-name-display"></span></p>
                 </div>
             </div>
-            <div style="position: relative; display: inline-block;">
-                <button id="menu-dots-btn" class="btn btn-secondary" style="font-size: 1.2rem; padding: 0.2rem 0.8rem; line-height: 1; border-radius: 20px; position: relative;">⋯<span id="queue-red-dot" class="queue-red-dot hidden"></span></button>
-                <div id="header-dropdown" class="dropdown-content hidden" style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 260px; box-shadow: var(--shadow); border-radius: var(--radius-lg); border: 1px solid var(--border-color); z-index: 10;">
-                    <!-- Active Queue Section -->
-                    <div id="queue-section" class="hidden" style="border-bottom: 1px solid var(--border-color); padding: 0.8rem 1rem; max-height: 250px; overflow-y: auto;">
-                        <p style="margin: 0 0 0.5rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color); display: flex; align-items: center; gap: 5px;">🔴 Patients on Hold</p>
-                        <div id="queue-list">
-                            <!-- Patients on hold will load here -->
+            <div style="display: flex; align-items: center; gap: 10px; position: relative;">
+                <button id="toggle-sidebar-btn" class="btn-toggle-sidebar" type="button">📋 Queue Sidebar</button>
+                <div style="position: relative; display: inline-block;">
+                    <button id="menu-dots-btn" class="btn btn-secondary"
+                        style="font-size: 1.2rem; padding: 0.2rem 0.8rem; line-height: 1; border-radius: 20px; position: relative;">⋯<span
+                            id="queue-red-dot" class="queue-red-dot hidden"></span></button>
+                    <div id="header-dropdown" class="dropdown-content hidden"
+                        style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 260px; box-shadow: var(--shadow); border-radius: var(--radius-lg); border: 1px solid var(--border-color); z-index: 10;">
+                        <!-- Active Queue Section -->
+                        <div id="queue-section" class="hidden"
+                            style="border-bottom: 1px solid var(--border-color); padding: 0.8rem 1rem; max-height: 250px; overflow-y: auto;">
+                            <p
+                                style="margin: 0 0 0.5rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color); display: flex; align-items: center; gap: 5px;">
+                                Patients on Hold</p>
+                            <div id="queue-list">
+                                <!-- Patients on hold will load here -->
+                            </div>
                         </div>
+                        <button onclick="window.location.href='profile.html'" class="dropdown-item"
+                            style="border-bottom: 1px solid var(--border-color);"> Profile Settings</button>
+                        <button id="history-btn" class="dropdown-item"
+                            style="border-bottom: 1px solid var(--border-color);"> Patient History</button>
+                        <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);"> Logout</button>
                     </div>
-                    <button onclick="window.location.href='profile.html'" class="dropdown-item" style="border-bottom: 1px solid var(--border-color);">⚙️ Profile Settings</button>
-                    <button id="history-btn" class="dropdown-item" style="border-bottom: 1px solid var(--border-color);">🩺 Patient History</button>
-                    <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);">🚪 Logout</button>
                 </div>
             </div>
         </header>
 
-        <main class="layout">
-            <section class="panel live-dictation">
-                <div class="panel-header">
-                    <h2>Live Dictation</h2>
-                    <div class="controls">
-                        <button id="start-btn" class="btn btn-primary">
-                            <span class="icon">🎙️</span> Start Live Dictation
-                        </button>
-                        <button id="finish-btn" class="btn btn-secondary" disabled>
-                            Finish Consultation
-                        </button>
-                    </div>
-                </div>
-                <div class="transcript-area">
-                    <p id="transcript-placeholder" class="placeholder-text">Click "Start Live Dictation" and begin
-                        speaking...</p>
-                    <div id="transcript-content"></div>
-                </div>
-            </section>
+        <!-- Patient Demographics & Safety Banner -->
+        <div id="demographics-banner" class="demographics-banner hidden" style="margin-bottom: 1.5rem;">
+            <div class="demographics-patient-info">
+                <div class="demographics-item">Patient: <strong id="banner-name">--</strong></div>
+                <div class="demographics-item">Age: <strong id="banner-age">--</strong></div>
+                <div class="demographics-item">Gender: <strong id="banner-gender">--</strong></div>
+                <div class="demographics-item">ID: <strong id="banner-ic">--</strong></div>
+            </div>
+            <div class="safety-badges">
+                <div class="badge badge-danger" id="banner-allergies" contenteditable="true" title="Edit allergies">Allergies: None</div>
+                <div class="badge badge-warning" id="banner-vitals" contenteditable="true" title="Edit vitals">BP: 120/80 | HR: 72</div>
+            </div>
+        </div>
 
-            <section class="panel structured-notes">
+        <div class="workspace-container">
+            <!-- Collapsible Queue Sidebar -->
+            <aside id="queue-sidebar" class="queue-sidebar panel">
                 <div class="panel-header">
-                    <h2>Structured Clinical Notes</h2>
+                    <h2>Patient Queue</h2>
                 </div>
-                <div class="notes-content" id="notes-content">
-                    <div id="loading-state" class="hidden">
-                        <div class="spinner"></div> Extracting data...
+                <div style="padding: 1.2rem; overflow-y: auto; flex-grow: 1;">
+                    <p style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">Patients on Hold</p>
+                    <div id="sidebar-queue-list">
+                        <!-- Loaded dynamically -->
+                        <p class="placeholder-text">No patients in queue.</p>
                     </div>
+                </div>
+            </aside>
 
-                    <div id="extracted-data" class="data-grid">
-                        <div class="data-field">
-                            <label>Name</label>
-                            <div class="value editable-field" id="val-name" contenteditable="false">--</div>
+            <!-- Main Scribe Panels -->
+            <div class="main-content-area">
+                <main class="workspace-layout">
+                    <section class="panel live-dictation">
+                        <div class="panel-header">
+                            <h2>Live Dictation</h2>
+                            <div class="controls">
+                                <button id="start-btn" class="btn btn-primary">
+                                    <span class="icon"></span> Start Live Dictation
+                                </button>
+                                <button id="finish-btn" class="btn btn-secondary" disabled>
+                                    Finish Consultation
+                                </button>
+                            </div>
                         </div>
-                        <div class="data-field">
-                            <label>Age</label>
-                            <div class="value editable-field" id="val-age" contenteditable="false">--</div>
+                        <div class="transcript-area">
+                            <p id="transcript-placeholder" class="placeholder-text">Click "Start Live Dictation" and begin speaking...</p>
+                            <div id="transcript-content"></div>
                         </div>
-                        <div class="data-field">
-                            <label>Gender</label>
-                            <div class="value editable-field" id="val-gender" contenteditable="false">--</div>
+                    </section>
+
+                    <section class="panel structured-notes">
+                        <div class="panel-header">
+                            <h2>Structured Clinical Notes</h2>
                         </div>
-                        <div class="data-field">
-                            <label>Subjective (S)</label>
-                            <div class="value editable-field" id="val-subjective" contenteditable="true">--</div>
+                        <div class="notes-content-wrapper">
+                            <!-- Digital Signature Lock Overlay -->
+                            <div id="signature-stamp-overlay" class="signature-stamp-overlay hidden">
+                                <div class="signature-stamp">
+                                    <span>Digitally Signed</span>
+                                    <span class="signature-stamp-date" id="signature-stamp-date">16 Jun 2026</span>
+                                </div>
+                            </div>
+
+                            <div class="notes-content" id="notes-content">
+                                <div id="loading-state" class="hidden">
+                                    <div class="spinner"></div> Extracting data...
+                                </div>
+
+                                <div id="extracted-data" class="data-grid">
+                                    <div class="data-field">
+                                        <label>Name</label>
+                                        <div class="value editable-field" id="val-name" contenteditable="false">--</div>
+                                    </div>
+                                    <div class="data-field">
+                                        <label>Age</label>
+                                        <div class="value editable-field" id="val-age" contenteditable="false">--</div>
+                                    </div>
+                                    <div class="data-field">
+                                        <label>Gender</label>
+                                        <div class="value editable-field" id="val-gender" contenteditable="false">--</div>
+                                    </div>
+                                    <div class="data-field">
+                                        <label>Subjective (S)</label>
+                                        <div class="value editable-field" id="val-subjective" contenteditable="true">--</div>
+                                    </div>
+                                    <div class="data-field">
+                                        <label>Objective (O)</label>
+                                        <div class="value editable-field" id="val-objective" contenteditable="true">--</div>
+                                    </div>
+                                    <div class="data-field">
+                                        <label>Assessment (A)</label>
+                                        <div class="value editable-field" id="val-assessment" contenteditable="true">--</div>
+                                    </div>
+                                    <div class="data-field">
+                                        <label>Plan (P)</label>
+                                        <div class="value editable-field" id="val-plan" contenteditable="true">--</div>
+                                    </div>
+                                </div>
+
+                                <!-- Interactive Prescriptions Builder -->
+                                <div class="prescription-container">
+                                    <div class="prescription-header">
+                                        <h3>Prescriptions & Medications</h3>
+                                        <button id="add-prescription-btn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 20px;" type="button">
+                                            + Add Medication
+                                        </button>
+                                    </div>
+                                    <div class="prescription-list-header">
+                                        <div>Drug Name</div>
+                                        <div>Dosage</div>
+                                        <div>Frequency</div>
+                                        <div>Duration</div>
+                                        <div></div>
+                                    </div>
+                                    <div id="prescription-list" class="prescription-list">
+                                        <!-- Prescription rows will load here -->
+                                    </div>
+                                </div>
+
+                                <div style="margin-top: 1.5rem; text-align: right;">
+                                    <button id="save-notes-btn" class="btn btn-primary">
+                                        <span class="icon"></span> Save Consultation
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div class="data-field">
-                            <label>Objective (O)</label>
-                            <div class="value editable-field" id="val-objective" contenteditable="true">--</div>
-                        </div>
-                        <div class="data-field">
-                            <label>Assessment (A)</label>
-                            <div class="value editable-field" id="val-assessment" contenteditable="true">--</div>
-                        </div>
-                        <div class="data-field">
-                            <label>Plan (P)</label>
-                            <div class="value editable-field" id="val-plan" contenteditable="true">--</div>
-                        </div>
-                    </div>
-                    <div style="margin-top: 1rem; text-align: right;">
-                        <button id="save-notes-btn" class="btn btn-primary">
-                            <span class="icon">💾</span> Save Consultation
-                        </button>
-                    </div>
-                </div>
-            </section>
-        </main>
+                    </section>
+                </main>
+            </div>
+        </div>
 
         <!-- Floating Action Button for CDS -->
         <div id="cds-fab" class="cds-fab" title="Open Clinical Brain">
-            <img src="logo.png" alt="Clinical AI Logo">
+            <img src="logo.png?v=2" alt="Clinical AI Logo">
         </div>
 
         <div id="cds-panel" class="cds-panel panel glass-panel hidden">
             <div class="panel-header">
                 <div style="display: flex; align-items: center; gap: 1rem;">
-                    <h2>🧠 Clinical Brain (CDS)</h2>
+                    <h2> Clinical Brain (CDS)</h2>
                     <div id="cds-loading" class="hidden glow-loading">
-                        <span class="icon pulsing-brain">🧠</span> Thinking...
+                        <span class="icon pulsing-brain">/span> Thinking...
                     </div>
                 </div>
-                <button id="close-cds-btn" class="btn btn-secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;" aria-label="Close">✕</button>
+                <button id="close-cds-btn" class="btn btn-secondary"
+                    style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;"
+                    aria-label="Close">✕</button>
             </div>
-            
+
             <div class="smart-suggestions">
                 <button class="smart-btn" data-query="Verify Guidelines">Verify Guidelines</button>
                 <button class="smart-btn" data-query="Summarize History">Summarize History</button>
@@ -146,18 +223,25 @@
     </div>
 
     <!-- History Modal -->
-    <div id="history-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
-        <div class="panel glass-panel" style="width: 80%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
+    <div id="history-modal" class="hidden"
+        style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+        <div class="panel glass-panel"
+            style="width: 80%; max-width: 800px; height: 80vh; display: flex; flex-direction: column;">
             <div class="panel-header">
                 <h2>Patient History</h2>
                 <button id="close-modal-btn" class="btn btn-secondary">Close</button>
             </div>
             <!-- Active Patient Tab Switch -->
-            <div id="history-filter-container" class="hidden" style="padding: 0.8rem 1.5rem; background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border-color); display: flex; gap: 10px;">
-                <button id="history-tab-current" class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 20px; font-weight: 600;" type="button">
+            <div id="history-filter-container" class="hidden"
+                style="padding: 0.8rem 1.5rem; background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border-color); display: flex; gap: 10px;">
+                <button id="history-tab-current" class="btn btn-primary"
+                    style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 20px; font-weight: 600;"
+                    type="button">
                     Current Patient
                 </button>
-                <button id="history-tab-past" class="btn btn-secondary" style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 20px; font-weight: 600;" type="button">
+                <button id="history-tab-past" class="btn btn-secondary"
+                    style="padding: 0.4rem 1rem; font-size: 0.85rem; border-radius: 20px; font-weight: 600;"
+                    type="button">
                     Past Patients
                 </button>
             </div>
@@ -168,40 +252,55 @@
     </div>
 
     <!-- Medical Certificate Modal -->
-    <div id="mc-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 1001;">
-        <div class="panel glass-panel" style="width: 90%; max-width: 500px; display: flex; flex-direction: column; padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); box-shadow: var(--shadow);">
-            <div class="panel-header" style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="margin: 0; font-size: 1.5rem; color: var(--primary-color);">📋 Issue Medical Certificate</h2>
-                <button id="close-mc-btn" class="btn btn-secondary" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">✕</button>
+    <div id="mc-modal" class="hidden"
+        style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 1001;">
+        <div class="panel glass-panel"
+            style="width: 90%; max-width: 500px; display: flex; flex-direction: column; padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); box-shadow: var(--shadow);">
+            <div class="panel-header"
+                style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0; font-size: 1.5rem; color: var(--primary-color);"> Issue Medical Certificate</h2>
+                <button id="close-mc-btn" class="btn btn-secondary"
+                    style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">✕</button>
             </div>
             <div style="display: flex; flex-direction: column; gap: 1.2rem;">
                 <div>
-                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient Name</label>
-                    <input type="text" id="mc-patient-name" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: rgba(0,0,0,0.02);" readonly>
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient
+                        Name</label>
+                    <input type="text" id="mc-patient-name"
+                        style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: rgba(0,0,0,0.02);"
+                        readonly>
                 </div>
                 <div style="display: flex; gap: 1rem;">
                     <div style="flex: 1;">
-                        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Start Date</label>
-                        <input type="date" id="mc-start-date" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Start
+                            Date</label>
+                        <input type="date" id="mc-start-date"
+                            style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                     </div>
                     <div style="flex: 1;">
-                        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">End Date</label>
-                        <input type="date" id="mc-end-date" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">End
+                            Date</label>
+                        <input type="date" id="mc-end-date"
+                            style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                     </div>
                 </div>
                 <div>
-                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Reason for Leave</label>
-                    <input type="text" id="mc-reason" placeholder="e.g. Fever, Upper Respiratory Tract Infection" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Reason
+                        for Leave</label>
+                    <input type="text" id="mc-reason" placeholder="e.g. Fever, Upper Respiratory Tract Infection"
+                        style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
                 </div>
-                <button id="download-mc-btn" class="btn btn-primary" style="width: 100%; padding: 0.8rem; margin-top: 1rem; font-weight: 600;">
-                    📥 Download MC PDF
+                <button id="download-mc-btn" class="btn btn-primary"
+                    style="width: 100%; padding: 0.8rem; margin-top: 1rem; font-weight: 600;">
+                    Download MC PDF
                 </button>
             </div>
         </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script src="logo_base64.js"></script>
+    <script src="logo_base64.js?v=2"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
