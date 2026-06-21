@@ -1,21 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=DM+Serif+Display:ital@0;1&display=swap');
 
 /* iOS 26-inspired styling structure */
 :root {
     --bg-color: #000000;
-    --card-bg: rgba(255, 255, 255, 0.15);
+    --card-bg: rgba(18, 18, 24, 0.7);
     --text-main: #ffffff;
-    --text-muted: rgba(255, 255, 255, 0.7);
-    --border-color: rgba(255, 255, 255, 0.2);
-    --primary-color: #00e5ff;
-    --primary-hover: #00b8cc;
-    --primary-light: rgba(0, 229, 255, 0.2);
+    --text-muted: rgba(255, 255, 255, 0.6);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --primary-color: #007aff;
+    --primary-hover: #0063cc;
+    --primary-light: rgba(0, 122, 255, 0.15);
     --danger-color: #ff3b30;
     --danger-hover: #d62b22;
     --radius-xl: 40px;
     --radius-lg: 32px;
     --radius-sm: 18px;
-    --shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.4), 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+    --shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 10px 20px -5px rgba(0, 0, 0, 0.3);
     --blur-intensity: blur(40px) saturate(180%);
 }
 
@@ -25,15 +25,34 @@
     padding: 0;
 }
 
+input, select, textarea {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 1rem;
+    transition: all 0.3s;
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: var(--primary-color);
+    background-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px var(--primary-light);
+    outline: none;
+}
+
 body {
-    font-family: 'DM Serif Display', serif;
-    background: radial-gradient(circle at 10% 20%, #003B46 0%, #00877a 100%);
+    font-family: 'DM Sans', sans-serif;
+    background-color: #000000;
+    background-image: radial-gradient(circle at 50% 0%, rgba(0, 122, 255, 0.1) 0%, transparent 60%);
     background-attachment: fixed;
     color: var(--text-main);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.01em;
 }
+
 
 .container {
     max-width: 1200px;
@@ -46,10 +65,14 @@ header {
     text-align: center;
 }
 
+h1, h2, h3 {
+    font-family: 'DM Serif Display', serif;
+    letter-spacing: -0.01em;
+}
+
 h1 {
     font-size: 2.2rem;
     font-weight: 600;
-    letter-spacing: -0.02em;
 }
 
 .subtext {
@@ -171,6 +194,7 @@ h2 {
     overflow-y: auto;
     font-size: 1.1rem;
     line-height: 1.6;
+    min-height: 0;
 }
 
 .placeholder-text {
@@ -184,6 +208,7 @@ h2 {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .data-grid {
@@ -543,7 +568,7 @@ body > .container > header .subtext {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: radial-gradient(circle at 10% 20%, #003B46 0%, #00877a 100%);
+    background: radial-gradient(circle at 50% 50%, rgba(0, 122, 255, 0.15) 0%, #000000 100%);
     z-index: 9999;
     display: flex;
     justify-content: center;
@@ -578,8 +603,8 @@ body > .container > header .subtext {
     height: 100%;
     border-radius: 50%;
     border: 4px solid transparent;
-    border-top-color: rgba(255, 255, 255, 0.8);
-    border-right-color: rgba(255, 255, 255, 0.3);
+    border-top-color: var(--primary-color);
+    border-right-color: rgba(0, 122, 255, 0.25);
     animation: swirl 1.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
     z-index: 1;
 }
@@ -681,16 +706,16 @@ body > .container > header .subtext {
     justify-content: space-between;
     align-items: center;
     padding: 0.6rem 0.8rem;
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    margin-bottom: 0.4rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 0.5rem;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .queue-patient-item:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.08);
     border-color: var(--primary-color);
 }
 
@@ -702,16 +727,16 @@ body > .container > header .subtext {
 .queue-patient-name {
     font-weight: 600;
     font-size: 0.9rem;
-    color: #1d1d1f;
+    color: var(--text-main);
 }
 
 .queue-patient-meta {
     font-size: 0.75rem;
-    color: #515154;
+    color: var(--text-muted);
 }
 
 .value.editable-field:not([contenteditable="true"]) {
-    background: rgba(0, 0, 0, 0.25) !important;
+    background: rgba(255, 255, 255, 0.05) !important;
     border: 1px dashed rgba(255, 255, 255, 0.1) !important;
     cursor: not-allowed;
     color: rgba(255, 255, 255, 0.5);
@@ -921,6 +946,7 @@ body > .container > header .subtext {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .signature-stamp-overlay {
@@ -988,3 +1014,136 @@ body > .container > header .subtext {
 .btn-toggle-sidebar:hover {
     background-color: rgba(255, 255, 255, 0.2);
 }
+
+/* --- Modern Load Animations --- */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInFromLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Automatic load animations applied to elements */
+.container {
+    animation: fadeIn 0.8s ease-out forwards;
+}
+
+header {
+    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.demographics-banner {
+    animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.queue-sidebar {
+    animation: slideInFromLeft 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workspace-layout section.panel.live-dictation {
+    animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.1s;
+    animation-fill-mode: both;
+}
+
+.workspace-layout section.panel.structured-notes {
+    animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.2s;
+    animation-fill-mode: both;
+}
+
+.cds-fab {
+    animation: scaleIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation-delay: 0.4s;
+}
+
+/* --- Workspace Grid Proportions --- */
+.workspace-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.35fr;
+    gap: 1.5rem;
+    width: 100%;
+}
+
+@media (max-width: 992px) {
+    .workspace-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Typing Indicator (iMessage-style) */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.8rem 1.2rem;
+    width: fit-content;
+    align-self: flex-start;
+    min-height: 38px;
+    box-sizing: border-box;
+}
+
+.typing-indicator span {
+    width: 8px;
+    height: 8px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    display: inline-block;
+    animation: typing 1.4s infinite both;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 100% {
+        transform: translateY(0);
+        opacity: 0.4;
+    }
+    50% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+

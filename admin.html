@@ -1,214 +1,952 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Health Sync</title>
-    <link rel="stylesheet" href="styles.css">
-    <style>
-        .admin-section {
-            margin-bottom: 2rem;
-            background: rgba(255, 255, 255, 0.85);
-            /* Glassy white */
-            backdrop-filter: var(--blur-intensity);
-            -webkit-backdrop-filter: var(--blur-intensity);
-            padding: 2rem;
-            border-radius: var(--radius-xl);
-            box-shadow: var(--shadow);
-            color: #1d1d1f;
-            /* Dark iOS text */
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Health Sync EHR</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+  <script src="storage.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
+    :root {
+      --bg-color: #000000;
+      --card-bg: rgba(18, 18, 24, 0.7);
+      --text-main: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary-color: #007aff;
+      --primary-hover: #0063cc;
+      --primary-light: rgba(0, 122, 255, 0.15);
+      --danger-color: #ff3b30;
+      --danger-hover: #d62b22;
+      --shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 10px 20px -5px rgba(0, 0, 0, 0.3);
+      --blur-intensity: blur(40px) saturate(180%);
+    }
 
-        .doctor-list,
-        .patient-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background-color: var(--bg-color);
+      background-image: radial-gradient(circle at 50% 0%, rgba(0, 122, 255, 0.1) 0%, transparent 60%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow: hidden;
+    }
 
-        .doctor-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        }
+    /* ─── Shell Layout ─────────────────────────────── */
+    .admin-shell {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
 
-        .patient-card {
-            background: rgba(0, 0, 0, 0.05);
-            margin: 1rem 0;
-            padding: 1.5rem;
-            border-radius: var(--radius-lg);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
+    /* ─── Sidebar ────────────────────────────────── */
+    .admin-sidebar {
+      width: 68px;
+      background: rgba(18, 18, 24, 0.95);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0 20px;
+      gap: 0;
+      flex-shrink: 0;
+      z-index: 100;
+    }
 
-        .history-btn {
-            background: none;
-            border: none;
-            color: #0071e3;
-            cursor: pointer;
-            font-weight: 600;
-        }
+    .sidebar-logo {
+      width: 40px;
+      height: 40px;
+      margin-bottom: 28px;
+    }
+    .sidebar-logo img {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      object-fit: contain;
+    }
 
-        .history-btn:hover {
-            color: #005bb5;
-            text-decoration: underline;
-        }
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+    }
 
-        .notes-content {
-            background: rgba(0, 0, 0, 0.03);
-            padding: 1rem;
-            margin-top: 0.8rem;
-            border-radius: var(--radius-sm);
-            display: none;
-        }
+    .nav-item {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.45);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.18s ease;
+      position: relative;
+    }
+    .nav-item:hover {
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.85);
+    }
+    .nav-item.active {
+      background: var(--primary-color);
+      color: #fff;
+      box-shadow: 0 4px 14px var(--primary-light);
+    }
+    .nav-item svg { width: 20px; height: 20px; }
 
-        .admin-section .subtext {
-            color: #515154 !important;
-            /* Force dark gray on light background */
-        }
-    </style>
-    <link rel="icon" type="image/png" href="favicon.png">
+    .nav-tooltip {
+      position: absolute;
+      left: 54px;
+      background: #1d1d2e;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      z-index: 999;
+    }
+    .nav-item:hover .nav-tooltip { opacity: 1; }
+
+    .sidebar-divider {
+      width: 32px;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+      margin: 8px 0;
+    }
+
+    .sidebar-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* ─── Main Area ──────────────────────────────── */
+    .admin-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ─── Top Bar ─────────────────────────────────── */
+    .admin-topbar {
+      height: 60px;
+      background: rgba(18, 18, 24, 0.7);
+      backdrop-filter: var(--blur-intensity);
+      -webkit-backdrop-filter: var(--blur-intensity);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      flex-shrink: 0;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .breadcrumb-root { color: var(--text-muted); }
+    .breadcrumb-sep { color: rgba(255, 255, 255, 0.3); }
+    .breadcrumb-current { color: var(--text-main); font-weight: 700; }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    .admin-avatar {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 5px 12px 5px 5px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      cursor: default;
+    }
+    .avatar-circle {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary-color), #0d47a1);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .avatar-info { line-height: 1.3; }
+    .avatar-name { font-size: 12px; font-weight: 700; color: var(--text-main); display: block; }
+    .avatar-role { font-size: 10px; color: var(--text-muted); display: block; }
+
+    /* ─── Content ─────────────────────────────────── */
+    .admin-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px;
+    }
+
+    /* ─── Section Pages ──────────────────────────── */
+    .admin-section-page { display: none; }
+    .admin-section-page.active { display: block; }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .page-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 26px;
+      color: var(--text-main);
+      font-weight: 700;
+    }
+    .page-sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+    /* ─── Stat Cards Row ─────────────────────────── */
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      flex: 1;
+      background: var(--card-bg);
+      backdrop-filter: var(--blur-intensity);
+      -webkit-backdrop-filter: var(--blur-intensity);
+      border-radius: 14px;
+      padding: 18px 20px;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow);
+      color: var(--text-main);
+    }
+    .stat-card-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 6px;
+    }
+    .stat-card-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .stat-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .val-blue { color: var(--primary-color); }
+    .val-green { color: #34c759; }
+    .val-purple { color: #5856d6; }
+    .val-amber { color: #ff9500; }
+    .val-red { color: var(--danger-color); }
+
+    /* ─── Tab Bar ─────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--border-color);
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      padding: 9px 20px;
+      border: none;
+      background: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+    .tab-btn.active {
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+    }
+    .tab-btn:hover:not(.active) { color: var(--text-main); }
+
+    /* ─── Card Grid ──────────────────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .item-card {
+      background: var(--card-bg);
+      backdrop-filter: var(--blur-intensity);
+      -webkit-backdrop-filter: var(--blur-intensity);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      color: var(--text-main);
+    }
+
+    .card-id-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-id { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .badge-pending { background: #fff3cd; color: #856404; }
+    .badge-active { background: #d1e7dd; color: #0a3622; }
+    .badge-queue { background: #cfe2ff; color: #084298; }
+
+    .card-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+    .info-field {}
+    .info-label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .info-value { font-size: 12px; color: var(--text-main); font-weight: 600; margin-top: 1px; }
+
+    .card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .btn-decline {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--danger-color);
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-decline:hover { background: rgba(255, 59, 48, 0.15); border-color: var(--danger-color); }
+    .btn-approve {
+      flex: 2;
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      background: var(--primary-color);
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-approve:hover { background: var(--primary-hover); }
+
+    /* ─── White Panel ────────────────────────────── */
+    .white-panel {
+      background: var(--card-bg);
+      backdrop-filter: var(--blur-intensity);
+      -webkit-backdrop-filter: var(--blur-intensity);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+      color: var(--text-main);
+    }
+    .white-panel h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 14px;
+    }
+
+    /* ─── Form Styles ────────────────────────────── */
+    .form-row { display: flex; gap: 14px; margin-bottom: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .form-control {
+      padding: 9px 12px;
+      border-radius: 9px;
+      border: 1px solid var(--border-color);
+      font-size: 13px;
+      font-family: 'DM Sans', sans-serif;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      transition: border-color 0.15s;
+    }
+    .form-control:focus { outline: none; border-color: var(--primary-color); }
+
+    .btn-primary-full {
+      width: 100%;
+      padding: 11px;
+      border-radius: 10px;
+      border: none;
+      background: var(--primary-color);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      margin-top: 6px;
+      transition: background 0.15s;
+    }
+    .btn-primary-full:hover { background: var(--primary-hover); }
+
+    .toggle-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .toggle-btn {
+      flex: 1;
+      padding: 9px;
+      border-radius: 9px;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.15s;
+    }
+    .toggle-btn.active-toggle {
+      background: var(--primary-color);
+      color: #fff;
+      border-color: var(--primary-color);
+    }
+
+    /* ─── Doctor List Item ───────────────────────── */
+    .doctor-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .doctor-item:last-child { border-bottom: none; }
+
+    /* ─── Analytics Cards ────────────────────────── */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .analytics-row-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+    .analytics-row-item:last-child { border-bottom: none; }
+    .analytics-row-item span:first-child { font-weight: 600; color: var(--text-main); }
+    .analytics-row-item span:last-child { font-weight: 700; color: var(--primary-color); }
+
+    .daily-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px dashed var(--border-color);
+      gap: 12px;
+      font-size: 12px;
+    }
+    .daily-date { width: 86px; flex-shrink: 0; color: var(--text-muted); }
+    .daily-bar-track { flex: 1; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 3px; overflow: hidden; }
+    .daily-bar-fill { height: 100%; background: var(--primary-color); border-radius: 3px; }
+    .daily-count { width: 64px; text-align: right; font-weight: 700; color: var(--text-main); }
+
+    /* ─── Overview List ──────────────────────────── */
+    .overview-card {
+      background: var(--card-bg);
+      backdrop-filter: var(--blur-intensity);
+      -webkit-backdrop-filter: var(--blur-intensity);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+      color: var(--text-main);
+    }
+    .overview-avatar {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary-color), #0d47a1);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 700; font-size: 15px; flex-shrink: 0;
+    }
+
+    /* ─── Queue Card ────────────────────────────── */
+    .queue-card {
+      background: var(--card-bg);
+      backdrop-filter: var(--blur-intensity);
+      -webkit-backdrop-filter: var(--blur-intensity);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow);
+      color: var(--text-main);
+    }
+    .queue-card-info { display: flex; flex-direction: column; gap: 3px; }
+    .queue-card-name { font-size: 14px; font-weight: 700; color: var(--text-main); }
+    .queue-card-meta { font-size: 12px; color: var(--text-muted); }
+    .queue-card-right { display: flex; align-items: center; gap: 10px; }
+
+    /* ─── Status ─────────────────────────────────── */
+    #registration-status, #upload-status {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 10px;
+      padding: 8px 14px;
+      border-radius: 8px;
+    }
+
+    /* ─── Placeholder ────────────────────────────── */
+    .placeholder-text {
+      color: var(--text-muted);
+      font-size: 13px;
+      font-style: italic;
+      padding: 12px 0;
+      text-align: center;
+    }
+    .hidden { display: none !important; }
+
+    /* ─── Scrollbar ──────────────────────────────── */
+    .admin-content::-webkit-scrollbar { width: 5px; }
+    .admin-content::-webkit-scrollbar-track { background: transparent; }
+    .admin-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 99px; }
+  </style>
 </head>
-
 <body>
-    <div class="container">
-        <div class="header-top">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <img src="logo.png?v=2" alt="Logo"
-                    style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: transparent;">
-                <h1 style="margin: 0;"> Admin Dashboard</h1>
-            </div>
-            <button id="logout-btn" class="btn btn-secondary">Logout</button>
-        </div>
 
-        <div class="admin-section">
-            <h2>Pending Doctor Approvals</h2>
-            <ul class="doctor-list" id="pending-list">
-                <!-- Pending doctors will load here -->
-            </ul>
-        </div>
+<div class="admin-shell">
 
-        <div class="admin-section">
-            <h2>Upload Medical Guidelines</h2>
-            <p class="subtext" style="margin-bottom: 1rem;">Upload PDF or DOCX files for the Clinical Brain to
-                reference.</p>
-            <form id="upload-guideline-form" style="display: flex; gap: 1rem; align-items: center;">
-                <input type="file" id="guideline-file" accept=".pdf,.docx" required class="btn"
-                    style="background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: #1d1d1f;">
-                <button type="submit" class="btn btn-primary" id="upload-btn">Upload Guideline</button>
-            </form>
-            <div id="upload-status" style="margin-top: 1rem; font-weight: bold;"></div>
-        </div>
-
-        <div class="admin-section">
-            <h2>Patient Registration & Consultation Queuing</h2>
-            <p class="subtext" style="margin-bottom: 1.5rem;">Register a new patient or select an existing patient to
-                assign them to a doctor's active queue.</p>
-
-            <!-- Registration Mode Toggle -->
-            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                <button id="mode-new-btn" class="btn btn-primary" type="button" style="flex: 1;">New
-                    Registration</button>
-                <button id="mode-returning-btn" class="btn btn-secondary" type="button"
-                    style="flex: 1; background: rgba(0,0,0,0.05); color: #1d1d1f;">Returning Patient</button>
-            </div>
-
-            <!-- Patient Queue Form -->
-            <form id="patient-registration-form" style="display: flex; flex-direction: column; gap: 1.2rem;">
-                <div id="new-patient-fields" style="display: flex; flex-direction: column; gap: 1rem;">
-                    <div style="display: flex; gap: 1rem;">
-                        <div style="flex: 2;">
-                            <label
-                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient
-                                Full Name</label>
-                            <input type="text" id="reg-name" placeholder="e.g. Ahmad Farhan" required
-                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                        </div>
-                        <div style="flex: 1;">
-                            <label
-                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Age</label>
-                            <input type="number" id="reg-age" placeholder="e.g. 29" required
-                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 1rem;">
-                        <div style="flex: 1;">
-                            <label
-                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Gender</label>
-                            <select id="reg-gender" required
-                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
-                                <option value="Male">Male</option>
-                                <option value="Female">Female</option>
-                            </select>
-                        </div>
-                        <div style="flex: 2;">
-                            <label
-                                style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Patient
-                                ID / IC Number (Letters & Numbers Only)</label>
-                            <input type="text" id="reg-ic" placeholder="e.g. 950102145693" required
-                                style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Returning Patient Fields (Hidden initially) -->
-                <div id="returning-patient-fields" class="hidden">
-                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Select
-                        Registered Patient</label>
-                    <select id="reg-patient-select"
-                        style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white; margin-bottom: 1rem;">
-                        <option value="">-- Choose a patient --</option>
-                        <!-- Loaded dynamically -->
-                    </select>
-                </div>
-
-                <!-- Doctor Assignment -->
-                <div>
-                    <label style="display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem;">Assign to
-                        Doctor</label>
-                    <select id="reg-doctor-select" required
-                        style="width: 100%; padding: 0.6rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: white;">
-                        <option value="">-- Choose a Doctor --</option>
-                        <!-- Loaded dynamically -->
-                    </select>
-                </div>
-
-                <button type="submit" class="btn btn-primary"
-                    style="width: 100%; padding: 0.8rem; margin-top: 0.5rem; font-weight: 600;"
-                    id="register-submit-btn">
-                    Queue Patient for Consultation
-                </button>
-            </form>
-            <div id="registration-status" style="margin-top: 1rem; font-weight: bold;"></div>
-        </div>
-
-        <div class="admin-section">
-            <h2>Live Consultation Queue</h2>
-            <p class="subtext" style="margin-bottom: 1.5rem;">Patients currently waiting in line. You can re-assign them
-                to another doctor if needed.</p>
-            <div id="live-queue-container" style="display: flex; flex-direction: column; gap: 1rem;">
-                <!-- Live queue lists loaded here -->
-                <p class="placeholder-text" style="padding: 1rem;">No patients currently in queue.</p>
-            </div>
-        </div>
-
-        <div class="admin-section">
-            <h2>System Overview (All Doctors & Patients)</h2>
-            <div id="overview-list">
-                <!-- Overview will load here -->
-            </div>
-        </div>
+  <!-- ═══════ SIDEBAR ═══════ -->
+  <nav class="admin-sidebar">
+    <div class="sidebar-logo">
+      <img src="logo.png?v=2" alt="HealthSync">
     </div>
-    <script src="admin.js"></script>
-</body>
 
+    <div class="sidebar-nav">
+      <!-- Queue -->
+      <button class="nav-item active" data-section="queue" onclick="showSection('queue', 'Live Queue')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span class="nav-tooltip">Live Queue</span>
+      </button>
+
+      <!-- Registration -->
+      <button class="nav-item" data-section="registration" onclick="showSection('registration', 'Patient Registration')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        <span class="nav-tooltip">Register Patient</span>
+      </button>
+
+      <!-- Doctor Approvals -->
+      <button class="nav-item" data-section="approvals" onclick="showSection('approvals', 'Doctor Approvals')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span class="nav-tooltip">Doctor Approvals</span>
+      </button>
+
+      <!-- Analytics -->
+      <button class="nav-item" data-section="analytics" onclick="showSection('analytics', 'Clinic Analytics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span class="nav-tooltip">Clinic Analytics</span>
+      </button>
+
+      <!-- Guidelines -->
+      <button class="nav-item" data-section="guidelines" onclick="showSection('guidelines', 'Medical Guidelines')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span class="nav-tooltip">Medical Guidelines</span>
+      </button>
+
+      <!-- System Overview -->
+      <button class="nav-item" data-section="overview" onclick="showSection('overview', 'System Overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span class="nav-tooltip">System Overview</span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-divider"></div>
+      <button class="nav-item" onclick="window.open('manual.html','_blank')" title="Help Manual">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="nav-tooltip">Help Manual</span>
+      </button>
+      <button class="nav-item" id="logout-btn" title="Logout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span class="nav-tooltip">Logout</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ═══════ MAIN ═══════ -->
+  <div class="admin-main">
+
+    <!-- Top Bar -->
+    <header class="admin-topbar">
+      <div class="breadcrumb">
+        <span class="breadcrumb-root">Admin</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-current" id="breadcrumb-current">Live Queue</span>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </button>
+        <div class="admin-avatar">
+          <div class="avatar-circle" id="avatar-initial">A</div>
+          <div class="avatar-info">
+            <span class="avatar-name" id="admin-display-name">Admin</span>
+            <span class="avatar-role">as a Administrator</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="admin-content">
+
+      <!-- ══ SECTION: Live Queue ══ -->
+      <section class="admin-section-page active" id="section-queue">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Live Consultation Queue</h1>
+            <p class="page-sub">Patients currently waiting. You can reassign them if needed.</p>
+          </div>
+        </div>
+        <!-- Stats -->
+        <div class="stats-row" id="queue-stats-row">
+          <div class="stat-card">
+            <div class="stat-card-label">Total in Queue</div>
+            <div class="stat-card-value val-blue" id="queue-stat-total">—</div>
+            <div class="stat-card-sub">Across all doctors</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Doctors Active</div>
+            <div class="stat-card-value val-green" id="queue-stat-doctors">—</div>
+            <div class="stat-card-sub">With waiting patients</div>
+          </div>
+        </div>
+        <!-- Content -->
+        <div class="white-panel">
+          <div id="live-queue-container" style="display:flex;flex-direction:column;gap:10px;">
+            <p class="placeholder-text">No patients currently in queue.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ SECTION: Patient Registration ══ -->
+      <section class="admin-section-page" id="section-registration">
+        <div class="section-header" style="max-width:680px; margin: 0 auto 24px auto;">
+          <div>
+            <h1 class="page-title">Patient Registration</h1>
+            <p class="page-sub">Register a new patient or queue a returning patient for consultation.</p>
+          </div>
+        </div>
+        <div class="white-panel" style="max-width:680px; margin: 0 auto;">
+          <h3>Registration Mode</h3>
+          <div class="toggle-row">
+            <button id="mode-new-btn" class="toggle-btn active-toggle" type="button">New Registration</button>
+            <button id="mode-returning-btn" class="toggle-btn" type="button">Returning Patient</button>
+          </div>
+          <form id="patient-registration-form">
+            <div id="new-patient-fields">
+              <div class="form-row">
+                <div class="form-group" style="flex:2">
+                  <label>Patient Full Name</label>
+                  <input class="form-control" type="text" id="reg-name" placeholder="e.g. Ahmad Farhan" required>
+                </div>
+                <div class="form-group" style="flex:1">
+                  <label>Age</label>
+                  <input class="form-control" type="number" id="reg-age" placeholder="e.g. 29" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex:1">
+                  <label>Gender</label>
+                  <select class="form-control" id="reg-gender" required>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div class="form-group" style="flex:2">
+                  <label>IC Number</label>
+                  <input class="form-control" type="text" id="reg-ic" placeholder="e.g. 950102145693" required>
+                </div>
+              </div>
+            </div>
+            <div id="returning-patient-fields" class="hidden">
+              <div class="form-group" style="margin-bottom:14px;">
+                <label>Select Registered Patient</label>
+                <select class="form-control" id="reg-patient-select">
+                  <option value="">-- Choose a patient --</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:6px;">
+              <label>Assign to Doctor</label>
+              <select class="form-control" id="reg-doctor-select" required>
+                <option value="">-- Choose a Doctor --</option>
+              </select>
+            </div>
+            <button type="submit" class="btn-primary-full" id="register-submit-btn">Queue Patient for Consultation</button>
+          </form>
+          <div id="registration-status"></div>
+        </div>
+      </section>
+
+      <!-- ══ SECTION: Doctor Approvals ══ -->
+      <section class="admin-section-page" id="section-approvals">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Doctor Approvals</h1>
+            <p class="page-sub">Review and approve pending doctor account registrations.</p>
+          </div>
+        </div>
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-card-label">Pending Approvals</div>
+            <div class="stat-card-value val-amber" id="approvals-stat-count">—</div>
+            <div class="stat-card-sub">Awaiting review</div>
+          </div>
+        </div>
+        <!-- Card Grid -->
+        <div class="card-grid" id="pending-list">
+          <!-- Loaded dynamically -->
+        </div>
+        <p class="placeholder-text hidden" id="approvals-empty-msg">No pending approvals.</p>
+      </section>
+
+      <!-- ══ SECTION: Analytics ══ -->
+      <section class="admin-section-page" id="section-analytics">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Monthly Clinic Analytics</h1>
+            <p class="page-sub">Clinic-wide statistics for patient visits and consultations.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="month" id="report-month-select" class="form-control" style="width:auto;">
+            <button id="load-report-btn" class="btn-approve" style="width:auto;padding:9px 20px;border-radius:10px;">Generate Report</button>
+          </div>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-card-label">Total Patient Visits</div>
+            <div class="stat-card-value val-blue" id="report-total-visits">0</div>
+            <div class="stat-card-sub">Encounters this month</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">Unique Patients Seen</div>
+            <div class="stat-card-value val-green" id="report-unique-patients">0</div>
+            <div class="stat-card-sub">Distinct individuals</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-label">New Registrations</div>
+            <div class="stat-card-value val-purple" id="report-new-registrations">0</div>
+            <div class="stat-card-sub">New patients this month</div>
+          </div>
+        </div>
+
+        <!-- Analytics Panels -->
+        <div class="analytics-grid">
+          <div class="white-panel" style="margin-bottom:0">
+            <h3>Consultations by Medical Officer</h3>
+            <div id="report-doctor-summary-list">
+              <p class="placeholder-text">Generate a report to see data.</p>
+            </div>
+          </div>
+          <div class="white-panel" style="margin-bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;">
+            <div style="font-size:11px;color:#8e8e93;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">New Patients This Month</div>
+            <div style="font-family:'DM Serif Display',serif;font-size:4rem;font-weight:700;color:#5856d6;line-height:1" id="report-new-registrations-big">0</div>
+            <div style="font-size:12px;color:#8e8e93;">patients registered</div>
+          </div>
+        </div>
+
+        <div class="white-panel" style="margin-top:16px;">
+          <h3>Daily Consultation Trends</h3>
+          <div id="report-daily-breakdown-list" style="display:flex;flex-direction:column;gap:4px;">
+            <p class="placeholder-text">Generate a report to see data.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ SECTION: Guidelines ══ -->
+      <section class="admin-section-page" id="section-guidelines">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">Medical Guidelines</h1>
+            <p class="page-sub">Upload PDF files for the Clinical Brain to reference during consultations.</p>
+          </div>
+        </div>
+        <div class="white-panel" style="max-width:600px;">
+          <h3>Upload New Guideline</h3>
+          <form id="upload-guideline-form" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <input type="file" id="guideline-file" accept=".pdf" required class="form-control" style="flex:1;min-width:200px;">
+            <button type="submit" class="btn-approve" id="upload-btn" style="padding:9px 20px;border-radius:10px;white-space:nowrap;">Upload Guideline</button>
+          </form>
+          <div id="upload-status"></div>
+        </div>
+        <div class="white-panel">
+          <h3>Current Clinical Guidelines in System</h3>
+          <div id="guidelines-list-container">
+            <p class="placeholder-text">Loading guidelines...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══ SECTION: System Overview ══ -->
+      <section class="admin-section-page" id="section-overview">
+        <div class="section-header">
+          <div>
+            <h1 class="page-title">System Overview</h1>
+            <p class="page-sub">All registered doctors and patients in the system.</p>
+          </div>
+        </div>
+        <div class="white-panel">
+          <div id="overview-list">
+            <p class="placeholder-text">Loading system data...</p>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /admin-content -->
+  </div><!-- /admin-main -->
+</div><!-- /admin-shell -->
+
+<script src="html2pdf.bundle.min.js"></script>
+<script src="logo_base64.js?v=2"></script>
+
+<script>
+  // ─── Section Navigation ────────────────────────────────────
+  function showSection(sectionId, label) {
+    document.querySelectorAll('.admin-section-page').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item[data-section]').forEach(b => b.classList.remove('active'));
+    document.getElementById('section-' + sectionId).classList.add('active');
+    document.querySelector('.nav-item[data-section="' + sectionId + '"]').classList.add('active');
+    document.getElementById('breadcrumb-current').textContent = label;
+  }
+</script>
+
+<script src="admin.js"></script>
+
+<script>
+  // ─── Post-load: wire up avatar name and queue stat counters ──
+  (function() {
+    const fn = AppStorage.getItem('first_name') || '';
+    const ln = AppStorage.getItem('last_name') || '';
+    const name = (fn + ' ' + ln).trim() || 'Admin';
+    const el = document.getElementById('admin-display-name');
+    if (el) el.textContent = name;
+    const initEl = document.getElementById('avatar-initial');
+    if (initEl) initEl.textContent = (name[0] || 'A').toUpperCase();
+
+    // Mirror new-registrations big number from the stat card
+    const mirrorStat = () => {
+      const src = document.getElementById('report-new-registrations');
+      const big = document.getElementById('report-new-registrations-big');
+      if (src && big) big.textContent = src.textContent;
+    };
+    const obs = new MutationObserver(mirrorStat);
+    const src = document.getElementById('report-new-registrations');
+    if (src) obs.observe(src, { childList: true, characterData: true, subtree: true });
+
+    // Patch mode toggle buttons for new CSS classes
+    const newBtn = document.getElementById('mode-new-btn');
+    const retBtn = document.getElementById('mode-returning-btn');
+    if (newBtn && retBtn) {
+      newBtn.addEventListener('click', () => {
+        newBtn.classList.add('active-toggle');
+        retBtn.classList.remove('active-toggle');
+      });
+      retBtn.addEventListener('click', () => {
+        retBtn.classList.add('active-toggle');
+        newBtn.classList.remove('active-toggle');
+      });
+    }
+  })();
+
+  // ─── Queue stat counters (update after live queue loads) ──
+  const _origLoadQueue = window.loadActiveQueue;
+  window.__updateQueueStats = function() {
+    const container = document.getElementById('live-queue-container');
+    if (!container) return;
+    const cards = container.querySelectorAll('.queue-card, .doctor-item, [data-queue-entry]');
+    const total = cards.length;
+    const totalEl = document.getElementById('queue-stat-total');
+    if (totalEl) totalEl.textContent = total || '0';
+
+    // Count unique doctors in queue (via doctor group headers)
+    const headers = container.querySelectorAll('h4, h3, .queue-doctor-header');
+    const docEl = document.getElementById('queue-stat-doctors');
+    if (docEl) docEl.textContent = headers.length || (total > 0 ? '1' : '0');
+  };
+
+  // Observe live-queue-container for changes and update stats
+  const queueObs = new MutationObserver(window.__updateQueueStats);
+  const qc = document.getElementById('live-queue-container');
+  if (qc) queueObs.observe(qc, { childList: true, subtree: true });
+
+  // Observe pending-list to update approval count stat
+  const pendingObs = new MutationObserver(() => {
+    const list = document.getElementById('pending-list');
+    const countEl = document.getElementById('approvals-stat-count');
+    const emptyMsg = document.getElementById('approvals-empty-msg');
+    if (!list || !countEl) return;
+    const items = list.querySelectorAll('.item-card, .doctor-item, li');
+    const count = items.length;
+    countEl.textContent = count;
+    if (emptyMsg) emptyMsg.classList.toggle('hidden', count > 0);
+  });
+  const pl = document.getElementById('pending-list');
+  if (pl) pendingObs.observe(pl, { childList: true, subtree: true });
+</script>
+
+</body>
 </html>

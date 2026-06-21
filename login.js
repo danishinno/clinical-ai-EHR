@@ -102,14 +102,14 @@ submitBtn.addEventListener('click', async () => {
 
             if (currentMode === 'login') {
                 // Store session
-                localStorage.setItem('user_id', data.user_id);
-                localStorage.setItem('username', data.username);
+                AppStorage.setItem('user_id', data.user_id);
+                AppStorage.setItem('username', data.username);
                 if (data.first_name) {
-                    localStorage.setItem('first_name', data.first_name);
+                    AppStorage.setItem('first_name', data.first_name);
                 } else {
-                    localStorage.removeItem('first_name'); // Clear if none
+                    AppStorage.removeItem('first_name'); // Clear if none
                 }
-                localStorage.setItem('role', data.role);
+                AppStorage.setItem('role', data.role);
                 
                 // Redirect
                 if (data.role === 'admin') {

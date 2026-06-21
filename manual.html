@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Sync EHR - User Manual</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="storage.js"></script>
+    <style>
+        .manual-section {
+            display: none;
+            animation: fadeIn 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .manual-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+        }
+
+        .manual-card {
+            background: var(--card-bg);
+            backdrop-filter: var(--blur-intensity);
+            -webkit-backdrop-filter: var(--blur-intensity);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .manual-card:hover {
+            border-color: rgba(0, 122, 255, 0.3);
+            box-shadow: 0 20px 40px -10px rgba(0, 122, 255, 0.1), var(--shadow);
+            transform: translateY(-2px);
+        }
+
+        .step-list {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .step-item {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            background: var(--primary-light);
+            color: var(--primary-color);
+            border: 1px solid rgba(0, 122, 255, 0.3);
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.4rem;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 0 15px rgba(0, 122, 255, 0.1);
+        }
+
+        .step-content {
+            flex-grow: 1;
+        }
+
+        .step-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.3rem;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .step-desc {
+            color: var(--text-muted);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.4rem 1rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-role {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .badge-primary {
+            background: var(--primary-light);
+            color: var(--primary-color);
+            border: 1px solid rgba(0, 122, 255, 0.2);
+        }
+
+        .warning-card {
+            border: 1px solid rgba(255, 59, 48, 0.2);
+            background: rgba(255, 59, 48, 0.04);
+        }
+
+        .warning-card:hover {
+            border-color: rgba(255, 59, 48, 0.4);
+            box-shadow: 0 20px 40px -10px rgba(255, 59, 48, 0.08), var(--shadow);
+        }
+
+        .warning-title {
+            color: var(--danger-color);
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+    <link rel="icon" type="image/png" href="favicon.png">
+</head>
+
+<body>
+    <div class="container" style="max-width: 900px; padding-top: 3rem; padding-bottom: 5rem;">
+
+        <!-- Access Denied View -->
+        <div id="access-denied" class="manual-section" style="text-align: center; margin-top: 5rem;">
+            <div class="manual-card warning-card" style="display: inline-block; max-width: 500px;">
+                <div class="warning-title" style="justify-content: center; font-size: 1.5rem; margin-bottom: 1rem;">
+                    ⚠️ Access Denied
+                </div>
+                <p style="color: var(--text-muted); margin-bottom: 2rem;">
+                    You must be logged in to view the clinical operations manual.
+                </p>
+                <button onclick="window.location.href='login.html'" class="btn btn-primary" style="padding: 0.8rem 2rem;">
+                    Go to Login Screen
+                </button>
+            </div>
+        </div>
+
+        <!-- Doctor Manual View -->
+        <div id="doctor-manual" class="manual-section">
+            <div class="manual-header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img src="logo.png?v=2" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; background: transparent;">
+                    <div>
+                        <h1 style="margin: 0; font-size: 2.2rem;">Health Sync EHR</h1>
+                        <p class="subtext" style="margin: 0;">Clinical Scribe Operations Manual</p>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="badge badge-primary">Medical Officer</span>
+                    <button onclick="navigateDashboard()" class="btn btn-secondary">Dashboard</button>
+                </div>
+            </div>
+
+            <div class="manual-card">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.8rem; color: var(--primary-color);">
+                    Introduction
+                </h2>
+                <p style="color: var(--text-muted); font-size: 1.1rem; line-height: 1.7;">
+                    Health Sync leverages advanced AI-driven audio processing and semantic clinical guidance to transform patient interactions. This guide covers how to effectively operate the system to ensure smooth consultations and compliant clinical operations.
+                </p>
+            </div>
+
+            <div class="manual-card">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1.2rem; color: var(--text-main);">
+                    System Workflow Instructions
+                </h2>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <div class="step-title">Queue & Demographics Banner</div>
+                            <div class="step-desc">
+                                Toggle the <strong>Queue Sidebar</strong> to see patients currently waiting on hold. Click on a patient to load their clinical profile. Their basic details and medical alerts (allergies, vitals) will instantly populate the horizontal demographics banner at the top of the workspace.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <div class="step-title">Ambient Live Dictation</div>
+                            <div class="step-desc">
+                                When the patient is ready, click <strong>"Start Live Dictation"</strong>. The AI listening engine will capture clinical speech. Speak naturally during the interview. The system displays a live transcript as you talk.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <div class="step-title">Structured SOAP Extraction</div>
+                            <div class="step-desc">
+                                Click <strong>"Finish Consultation"</strong> when the clinical interview is complete. The system will process the transcription and automatically extract a structured clinical record organized by Subjective (S), Objective (O), Assessment (A), and Plan (P).
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <div class="step-title">Review, Edit & Sign Notes</div>
+                            <div class="step-desc">
+                                Click in any SOAP data field (e.g. Assessment or Plan) to edit the details directly. Ensure all diagnoses and prescriptions are correct. When finalized, click <strong>"Sign & Save"</strong> to apply a digital cryptographic signature stamp to the note, locking it against future modification.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">5</div>
+                        <div class="step-content">
+                            <div class="step-title">Clinical Brain CDS (Clinical Decision Support)</div>
+                            <div class="step-desc">
+                                Access evidence-based guidelines on-demand by clicking the floating <strong>"Brain Logo FAB"</strong> in the bottom right corner. Ask clinical questions or request diagnostic checklists based directly on the uploaded medical guidelines database.
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Medical Certificate Compliance Warning -->
+            <div class="manual-card warning-card">
+                <div class="warning-title" style="font-size: 1.25rem;">
+                    ⚠️ Medical Certificate (MC) Compliance Restrictions
+                </div>
+                <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 1rem; line-height: 1.6;">
+                    Medical certificates are legal documents subject to strict compliance rules. The system enforces the following logic to prevent retroactive changes and unauthorized issuances:
+                </p>
+                <ul style="color: var(--text-muted); padding-left: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.95rem;">
+                    <li><strong>No Past-Day Certificates:</strong> Medical certificates cannot be generated for consultations completed on previous calendar days.</li>
+                    <li><strong>2-Hour Issuance Limit:</strong> A Medical Certificate must be generated within <strong>2 hours (120 minutes)</strong> of the consultation end time (when the doctor clicked "Finish"). After 2 hours, the "Generate MC" button will be permanently disabled.</li>
+                    <li><strong>Prompt Issuance Advice:</strong> Ensure you review, edit, and issue necessary MCs immediately after ending the consultation to avoid lockout.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Administrator Manual View -->
+        <div id="admin-manual" class="manual-section">
+            <div class="manual-header">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <img src="logo.png?v=2" alt="Logo" style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; background: transparent;">
+                    <div>
+                        <h1 style="margin: 0; font-size: 2.2rem;">Health Sync EHR</h1>
+                        <p class="subtext" style="margin: 0;">Administration Operations Manual</p>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span class="badge badge-role">System Administrator</span>
+                    <button onclick="navigateDashboard()" class="btn btn-secondary">Dashboard</button>
+                </div>
+            </div>
+
+            <div class="manual-card">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.8rem; color: var(--primary-color);">
+                    Introduction
+                </h2>
+                <p style="color: var(--text-muted); font-size: 1.1rem; line-height: 1.7;">
+                    Welcome to the Health Sync Administration system. As an administrator, you manage doctor approvals, clinical guidelines, patient queuing operations, and clinic performance report analytics.
+                </p>
+            </div>
+
+            <div class="manual-card">
+                <h2 style="font-size: 1.5rem; margin-bottom: 1.2rem; color: var(--text-main);">
+                    Administrative Workflows
+                </h2>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <div class="step-title">Doctor Approvals</div>
+                            <div class="step-desc">
+                                All newly registered doctors are held in a pending state until verified. Review credentials in the <strong>"Pending Doctor Approvals"</strong> list and click "Approve" to activate their account and grant dashboard access.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <div class="step-title">Clinical Guidelines Storage & Display</div>
+                            <div class="step-desc">
+                                Maintain the medical database by uploading clinical PDF guidelines. The system automatically parses these files and records them in the local guidelines database. The uploaded guidelines are displayed in the <strong>"Current Clinical Guidelines"</strong> table for audit tracking.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <div class="step-title">Patient Queue Management</div>
+                            <div class="step-desc">
+                                Register new patients or retrieve returning patients from the database. Assign patients to specific doctors. Admins can view the live consultation queue and re-assign patients to a different doctor if needed.
+                            </div>
+                        </div>
+                    </li>
+                    <li class="step-item">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <div class="step-title">Clinic Performance & Analytics Reports</div>
+                            <div class="step-desc">
+                                The system tracks clinic-wide consultation counts and medication prescriptions. Use the <strong>"Monthly Clinic Analytics & Reports"</strong> module to generate monthly reports outlining total visits, total prescription counts, top prescribed drugs, consultation breakdowns by doctor, and daily clinic activity.
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const role = AppStorage.getItem('role');
+            
+            // Hide all manual sections by default
+            document.getElementById('access-denied').style.display = 'none';
+            document.getElementById('doctor-manual').style.display = 'none';
+            document.getElementById('admin-manual').style.display = 'none';
+
+            if (role === 'admin') {
+                document.getElementById('admin-manual').style.display = 'block';
+            } else if (role === 'dr') {
+                document.getElementById('doctor-manual').style.display = 'block';
+            } else {
+                document.getElementById('access-denied').style.display = 'block';
+            }
+        });
+
+        function navigateDashboard() {
+            const role = AppStorage.getItem('role');
+            if (role === 'admin') {
+                window.location.href = 'admin.html';
+            } else if (role === 'dr') {
+                window.location.href = 'index.html';
+            } else {
+                window.location.href = 'login.html';
+            }
+        }
+    </script>
+</body>
+
+</html>

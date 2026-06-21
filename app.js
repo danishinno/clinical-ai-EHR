@@ -1,12 +1,12 @@
-const userId = localStorage.getItem('user_id');
+const userId = AppStorage.getItem('user_id');
 if (!userId) {
     window.location.href = 'login.html';
 }
 
-document.getElementById('dr-name-display').textContent = localStorage.getItem('first_name') || localStorage.getItem('username') || '';
+document.getElementById('dr-name-display').textContent = AppStorage.getItem('first_name') || AppStorage.getItem('username') || '';
 
 document.getElementById('logout-btn').addEventListener('click', () => {
-    localStorage.clear();
+    AppStorage.clear();
     window.location.href = 'login.html';
 });
 
@@ -251,7 +251,7 @@ if (saveNotesBtn) {
                     currentEncounterId = result.encounter_id;
                     currentDocId = result.doc_id;
 
-                    saveNotesBtn.innerHTML = '<span class="icon">✅</span> Saved';
+                    saveNotesBtn.innerHTML = '<span class="icon"></span> Saved';
                     cdsHistory = [];
                     window.triggerDigitallySignedState();
 
@@ -349,7 +349,11 @@ function addChatBubble(text, isUser = false, isHtml = false) {
     } else {
         bubble.textContent = text;
     }
-    chatArea.appendChild(bubble);
+    if (cdsLoading && chatArea.contains(cdsLoading)) {
+        chatArea.insertBefore(bubble, cdsLoading);
+    } else {
+        chatArea.appendChild(bubble);
+    }
     chatArea.scrollTop = chatArea.scrollHeight;
 }
 
@@ -467,6 +471,13 @@ async function fetchAndRenderHistory() {
                 const doctorName = (p.doc_first && p.doc_last) ? `Dr. ${p.doc_first} ${p.doc_last}` : 'Unknown Doctor';
                 const formattedDate = new Date(p.created_at).toLocaleString();
 
+                const createdTime = new Date(p.created_at);
+                const now = new Date();
+                const diffMs = now - createdTime;
+                const diffHours = diffMs / (1000 * 60 * 60);
+                const isToday = createdTime.toDateString() === now.toDateString();
+                const canGenerateMC = isToday && (diffHours <= 2);
+
                 rowDiv.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; cursor: pointer;"
                          onclick="toggleConsultationDetails('notes-${p.encounter_id}', this)">
@@ -474,10 +485,19 @@ async function fetchAndRenderHistory() {
                              Consultation on ${formattedDate} <span style="font-size: 0.85rem; color: #86868b; font-weight: 500;">(Treated by ${doctorName})</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem; flex-shrink: 0;" onclick="event.stopPropagation();">
+                            ${canGenerateMC ? `
                             <button onclick="generateCertificate(${p.encounter_id})" class="btn btn-secondary"
-                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
+                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;"
+                                title="Issue Medical Certificate">
                                  MC
                             </button>
+                            ` : `
+                            <button class="btn btn-secondary" disabled
+                                title="MC can only be generated within 2 hours of today's consultation"
+                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); cursor:not-allowed;">
+                                 MC
+                            </button>
+                            `}
                             <button onclick="toggleInlineEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
                                 style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
                                  Edit Note
@@ -561,7 +581,7 @@ window.toggleInlineEdit = async function (encounterId, docId, btnElement) {
             const data = await response.json();
             if (data.success) {
                 cells.forEach(cell => cell.removeAttribute('contenteditable'));
-                btnElement.innerHTML = '✏️ Edit Note';
+                btnElement.innerHTML = 'Edit Note';
                 btnElement.style.color = 'black';
                 btnElement.style.background = '#e5e5ea';
                 cdsHistory = [];
@@ -671,8 +691,8 @@ if (downloadMcBtn) {
 
         // Fetch Doctor Profile to display Registration/ID number & correct names
         let doctorIdNumber = 'PR-88291-A';
-        let docFirstName = localStorage.getItem('first_name') || 'Mark';
-        let docLastName = localStorage.getItem('last_name') || 'Schrieber';
+        let docFirstName = AppStorage.getItem('first_name') || 'Mark';
+        let docLastName = AppStorage.getItem('last_name') || 'Schrieber';
 
         try {
             const drProfileResponse = await fetch(`http://127.0.0.1:8000/doctor/${userId}/profile`);
@@ -775,19 +795,37 @@ if (downloadMcBtn) {
             </div>
         `;
 
-        const opt = {
-            margin: 10,
-            filename: `HealthSync_MC_${patientName.replace(/\s+/g, '_')}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
         try {
             downloadMcBtn.disabled = true;
             downloadMcBtn.innerText = ' Generating PDF...';
 
-            await html2pdf().from(element).set(opt).save();
+            const mcHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Medical Certificate - ${patientName}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Serif Display',serif;background:#fff;color:#1e1e1e;padding:35px;font-size:14px}
+  @media print{@page{margin:10mm;size:A4 portrait}body{padding:0}}
+</style>
+</head>
+<body>
+${element.outerHTML}
+<script>window.onload=function(){window.print()};<\/script>
+</body>
+</html>`;
+
+            const win = window.open('', '_blank', 'width=800,height=1050,scrollbars=yes');
+            if (!win) {
+                alert('Popup blocked! Please allow popups for localhost:8080 and try again.');
+                downloadMcBtn.disabled = false;
+                downloadMcBtn.innerText = ' Download MC PDF';
+                return;
+            }
+            win.document.write(mcHtml);
+            win.document.close();
 
             downloadMcBtn.innerText = ' Download Complete';
             setTimeout(() => {
@@ -867,8 +905,21 @@ async function pollQueue() {
         const data = await response.json();
 
         const sidebarList = document.getElementById('sidebar-queue-list');
+        const statsCount = document.getElementById('stats-queue-count');
+        const completedCountEl = document.getElementById('stats-completed-count');
+
+        // Fetch completed consultations count dynamically
+        try {
+            const historyResponse = await fetch(`http://127.0.0.1:8000/doctor/${userId}/patients`);
+            const historyData = await historyResponse.json();
+            const encounters = historyData.patients || historyData.encounters || [];
+            if (completedCountEl) completedCountEl.innerText = encounters.length;
+        } catch (e) {
+            console.error('Error updating completed count:', e);
+        }
 
         if (data.patients && data.patients.length > 0) {
+            if (statsCount) statsCount.innerText = data.patients.length;
             queueRedDot.classList.remove('hidden');
             queueSection.classList.remove('hidden');
 
@@ -909,6 +960,7 @@ async function pollQueue() {
                 }
             });
         } else {
+            if (statsCount) statsCount.innerText = '0';
             queueRedDot.classList.add('hidden');
             queueSection.classList.add('hidden');
             queueList.innerHTML = '';
@@ -969,7 +1021,7 @@ function loadPatient(patient) {
     const saveBtn = document.getElementById('save-notes-btn');
     if (saveBtn) {
         saveBtn.classList.remove('hidden');
-        saveBtn.innerHTML = '<span class="icon">💾</span> Save Consultation';
+        saveBtn.innerHTML = '<span class="icon"></span> Save Consultation';
     }
 
     alert(`Active consultation assigned for: ${patient.patient_name}`);
@@ -1053,6 +1105,287 @@ window.unlockConsultationWorkspace = function() {
     const prescList = document.getElementById('prescription-list');
     if (prescList) prescList.innerHTML = '';
 };
+
+// --- Monthly Report Modal Logic ---
+const reportModal = document.getElementById('report-modal');
+const reportBtn = document.getElementById('report-btn');
+const closeReportBtn = document.getElementById('close-report-btn');
+const loadReportBtn = document.getElementById('load-report-btn');
+const reportMonthSelect = document.getElementById('report-month-select');
+
+// Set default month in selector to current month
+if (reportMonthSelect) {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    reportMonthSelect.value = `${year}-${month}`;
+}
+
+if (reportBtn) {
+    reportBtn.addEventListener('click', () => {
+        const headerDropdown = document.getElementById('header-dropdown');
+        if (headerDropdown) headerDropdown.classList.add('hidden');
+        if (reportModal) reportModal.classList.remove('hidden');
+        window.loadMonthlyReport();
+    });
+}
+
+if (closeReportBtn) {
+    closeReportBtn.addEventListener('click', () => {
+        if (reportModal) reportModal.classList.add('hidden');
+    });
+}
+
+if (loadReportBtn) {
+    loadReportBtn.addEventListener('click', () => {
+        window.loadMonthlyReport(true);
+    });
+}
+
+window.loadMonthlyReport = async function(shouldDownload = false) {
+    const selectedMonth = reportMonthSelect ? reportMonthSelect.value : '';
+    let url = `http://127.0.0.1:8000/report/monthly`;
+    const params = [];
+    if (selectedMonth) {
+        params.push(`month=${selectedMonth}`);
+    }
+    if (userId) {
+        params.push(`doctor_id=${userId}`);
+    }
+    if (params.length > 0) {
+        url += '?' + params.join('&');
+    }
+    
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('report-total-visits').innerText = data.summary.total_visits;
+            document.getElementById('report-total-prescriptions').innerText = data.summary.total_prescriptions;
+            
+            // Render Doctor Summary
+            const docList = document.getElementById('report-doctor-summary-list');
+            if (docList) {
+                docList.innerHTML = '';
+                if (data.summary.doctor_summary && data.summary.doctor_summary.length > 0) {
+                    data.summary.doctor_summary.forEach(d => {
+                        const row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.justifyContent = 'space-between';
+                        row.style.padding = '0.5rem 0';
+                        row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                        row.innerHTML = `
+                            <span style="font-weight:600; color:#ffffff;">${d.doctor_name}</span>
+                            <span style="color:var(--primary-color); font-weight:700;">${d.visit_count} consults</span>
+                        `;
+                        docList.appendChild(row);
+                    });
+                } else {
+                    docList.innerHTML = '<p class="placeholder-text" style="padding:0.5rem 0;">No consultation records for this month.</p>';
+                }
+            }
+            
+            // Render Top Prescribed Drugs
+            const drugList = document.getElementById('report-top-drugs-list');
+            if (drugList) {
+                drugList.innerHTML = '';
+                if (data.summary.top_drugs && data.summary.top_drugs.length > 0) {
+                    data.summary.top_drugs.forEach(dr => {
+                        const row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.justifyContent = 'space-between';
+                        row.style.padding = '0.5rem 0';
+                        row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                        row.innerHTML = `
+                            <span style="font-weight:600; color:#ffffff;">${dr.drug}</span>
+                            <span style="color:var(--danger-color); font-weight:700;">${dr.count} times</span>
+                        `;
+                        drugList.appendChild(row);
+                    });
+                } else {
+                    drugList.innerHTML = '<p class="placeholder-text" style="padding:0.5rem 0;">No prescriptions recorded for this month.</p>';
+                }
+            }
+            
+            // Render Daily Breakdown (with horizontal bar visual trends)
+            const dailyList = document.getElementById('report-daily-breakdown-list');
+            if (dailyList) {
+                dailyList.innerHTML = '';
+                if (data.summary.date_summary && data.summary.date_summary.length > 0) {
+                    const maxVisits = Math.max(...data.summary.date_summary.map(d => d.visit_count), 0);
+                    data.summary.date_summary.forEach(day => {
+                        const percentage = maxVisits > 0 ? (day.visit_count / maxVisits) * 100 : 0;
+                        const row = document.createElement('div');
+                        row.style.display = 'flex';
+                        row.style.alignItems = 'center';
+                        row.style.justifyContent = 'space-between';
+                        row.style.padding = '0.4rem 0';
+                        row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                        row.innerHTML = `
+                            <span style="color:var(--text-muted); width: 90px; flex-shrink: 0; font-size: 0.85rem;">${day.date}</span>
+                            <div style="flex-grow: 1; margin: 0 1rem; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden; position: relative;">
+                                <div style="width: ${percentage}%; height: 100%; background: var(--primary-color); border-radius: 4px;"></div>
+                            </div>
+                            <span style="color:#ffffff; font-weight:600; width: 60px; text-align: right; font-size: 0.85rem;">${day.visit_count} visits</span>
+                        `;
+                        dailyList.appendChild(row);
+                    });
+                } else {
+                    dailyList.innerHTML = '<p class="placeholder-text" style="padding: 0.5rem 0;">No data.</p>';
+                }
+            }
+
+            // Auto-download PDF if requested
+            if (shouldDownload) {
+                let targetMonth = selectedMonth;
+                if (!targetMonth) {
+                    const now = new Date();
+                    targetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                }
+                await downloadReportPDF(data, targetMonth);
+            }
+        } else {
+            alert('Failed to load report: ' + data.message);
+        }
+    } catch (e) {
+        console.error('Error fetching report:', e);
+        alert('Network error loading report data.');
+    }
+};
+
+async function downloadReportPDF(data, monthStr) {
+    let formattedMonth = monthStr;
+    try {
+        const parts = monthStr.split('-');
+        const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1);
+        formattedMonth = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+    } catch (e) {}
+
+    const docRows = (data.summary.doctor_summary && data.summary.doctor_summary.length > 0)
+        ? data.summary.doctor_summary.map(d => `
+            <div class="row-item">
+                <span class="row-label">${d.doctor_name}</span>
+                <span class="row-value blue">${d.visit_count} consultations</span>
+            </div>`).join('')
+        : '<p class="empty-note">No consultations recorded.</p>';
+
+    const drugRows = (data.summary.top_drugs && data.summary.top_drugs.length > 0)
+        ? data.summary.top_drugs.map(dr => `
+            <div class="row-item">
+                <span class="row-label">${dr.drug}</span>
+                <span class="row-value red">${dr.count} times</span>
+            </div>`).join('')
+        : '<p class="empty-note">No prescriptions recorded.</p>';
+
+    const maxVisits = data.summary.date_summary ? Math.max(...data.summary.date_summary.map(d => d.visit_count), 0) : 0;
+    const dailyRows = (data.summary.date_summary && data.summary.date_summary.length > 0)
+        ? data.summary.date_summary.map(day => {
+            const pct = maxVisits > 0 ? (day.visit_count / maxVisits) * 100 : 0;
+            return `<div class="daily-row">
+                <span class="daily-date">${day.date}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                <span class="daily-count">${day.visit_count} visits</span>
+            </div>`;
+        }).join('')
+        : '<p class="empty-note">No daily data available.</p>';
+
+    const logoHtml = window.SYSTEM_LOGO_BASE64
+        ? `<img src="${window.SYSTEM_LOGO_BASE64}" style="width:50px;height:50px;border-radius:50%;object-fit:contain;">`
+        : `<div style="width:50px;height:50px;border-radius:50%;background:#0284c7;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:12px;">HS</div>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HealthSync Report - ${formattedMonth}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:#fff;color:#1e293b;padding:28px 34px;font-size:13px}
+  .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e2e8f0;padding-bottom:14px;margin-bottom:20px}
+  .header-left{display:flex;align-items:center;gap:12px}
+  .clinic-name{font-family:'DM Serif Display',serif;font-size:21px;color:#0f172a;font-weight:700}
+  .clinic-sub{font-size:11px;color:#64748b;margin-top:2px}
+  .month-badge{background:#e0f2fe;color:#0369a1;font-weight:700;font-size:11px;padding:4px 12px;border-radius:9999px;text-transform:uppercase;display:inline-block}
+  .generated{font-size:10px;color:#94a3b8;margin-top:4px;text-align:right}
+  .cards{display:flex;gap:16px;margin-bottom:20px}
+  .card{flex:1;border:1px solid #e2e8f0;background:#fafafa;padding:13px;border-radius:10px;text-align:center}
+  .card-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .card-value{font-family:'DM Serif Display',serif;font-size:32px;font-weight:700;margin-top:5px}
+  .card-value.blue{color:#0284c7}.card-value.red{color:#ef4444}
+  .split{display:flex;gap:16px;margin-bottom:20px}
+  .box{border:1px solid #e2e8f0;padding:13px;border-radius:10px;background:#fff}
+  .box.wide{flex:1.2}.box.narrow{flex:1}
+  .box-title{font-size:10px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-bottom:8px}
+  .row-item{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9}
+  .row-label{font-weight:600;color:#334155}.row-value{font-weight:700}
+  .row-value.blue{color:#0284c7}.row-value.red{color:#ef4444}
+  .daily-row{display:flex;align-items:center;padding:4px 0;border-bottom:1px dashed #e2e8f0}
+  .daily-date{width:86px;flex-shrink:0;color:#475569;font-size:12px}
+  .bar-track{flex-grow:1;margin:0 12px;height:6px;background:#f1f5f9;border-radius:3px;overflow:hidden}
+  .bar-fill{height:100%;background:#0284c7;border-radius:3px}
+  .daily-count{width:64px;text-align:right;font-weight:600;color:#0f172a;font-size:12px}
+  .empty-note{font-style:italic;color:#94a3b8;font-size:12px;padding:4px 0}
+  .full-box{border:1px solid #e2e8f0;padding:13px;border-radius:10px;background:#fff}
+  .footer{text-align:center;margin-top:28px;border-top:1px solid #e2e8f0;padding-top:11px;font-size:10px;color:#94a3b8;line-height:1.5}
+  @media print{@page{margin:10mm;size:A4 portrait}body{padding:0}}
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      ${logoHtml}
+      <div>
+        <div class="clinic-name">Health Sync EHR</div>
+        <div class="clinic-sub">Clinic Management System &bull; Performance Audit</div>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="month-badge">${formattedMonth}</div>
+      <div class="generated">Report Generated: ${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Total Patient Visits</div>
+      <div class="card-value blue">${data.summary.total_visits}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Prescriptions Issued</div>
+      <div class="card-value red">${data.summary.total_prescriptions}</div>
+    </div>
+  </div>
+  <div class="split">
+    <div class="box wide">
+      <div class="box-title">Consultations by Medical Officer</div>
+      ${docRows}
+    </div>
+    <div class="box narrow">
+      <div class="box-title">Top Prescribed Medications</div>
+      ${drugRows}
+    </div>
+  </div>
+  <div class="full-box">
+    <div class="box-title">Daily Consultation Trends</div>
+    ${dailyRows}
+  </div>
+  <div class="footer">
+    This clinic report is generated automatically by Health Sync EHR.<br>
+    For official record queries, contact administration at contact@healthsync.my
+  </div>
+  <script>window.onload=function(){window.print()};<\/script>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=860,height=1100,scrollbars=yes');
+    if (!win) {
+        alert('Popup blocked! Please allow popups for localhost:8080 in your browser settings and try again.');
+        return;
+    }
+    win.document.write(html);
+    win.document.close();
+}
 
 // Start queue polling
 pollQueue();

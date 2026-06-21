@@ -646,14 +646,30 @@ async def generate_certificate(query: CertificateQuery):
     if not encounter:
         return {"success": False, "message": "Encounter visit log file not found."}
 
-    # Extract strings to verify equality (YYYY-MM-DD constraint match check)
+    # Reject if the consultation is from a previous day (past consultations check)
     encounter_date = encounter['created_at'][:10]
     current_date = datetime.now().strftime('%Y-%m-%d')
 
     if encounter_date != current_date:
         return {
             "success": False, 
-            "message": f"Security compliance constraint violation: Cannot issue medical certificates for historical records. Encounter date: {encounter_date}, current clock date: {current_date}."
+            "message": "Security compliance constraint violation: Cannot issue medical certificates for past consultations."
+        }
+
+    # Reject if more than 2 hours have passed since the consultation ended (created_at)
+    try:
+        encounter_time = datetime.fromisoformat(encounter['created_at'])
+    except ValueError:
+        try:
+            encounter_time = datetime.strptime(encounter['created_at'], "%Y-%m-%dT%H:%M:%S.%f")
+        except Exception:
+            encounter_time = datetime.now()
+
+    time_diff = datetime.now() - encounter_time
+    if time_diff.total_seconds() > 2 * 3600:
+        return {
+            "success": False,
+            "message": "Security compliance constraint violation: Medical Certificate cannot be generated more than 2 hours after the consultation ends."
         }
 
     notes = json.loads(encounter['structured_notes_json'])
@@ -681,16 +697,18 @@ async def generate_certificate(query: CertificateQuery):
 # PHASE 5: ACCOUNT AUTHENTICATION & MANAGEMENT WITH OVERVIEW JOINS
 @app.post("/signup")
 async def signup(query: SignupQuery):
-    existing = query_db("SELECT id FROM users WHERE username = ?", (query.username,), one=True)
+    username_clean = query.username.strip()
+    existing = query_db("SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (username_clean,), one=True)
     if existing: return {"success": False, "message": "Username already exists."}
     hashed = hash_password(query.password)
     query_db("INSERT INTO users (username, password, first_name, last_name, id_number, role, is_approved) VALUES (?, ?, ?, ?, ?, 'dr', 0)",
-             (query.username, hashed, query.first_name, query.last_name, query.id_number), commit=True)
+             (username_clean, hashed, query.first_name, query.last_name, query.id_number), commit=True)
     return {"success": True, "message": "Account awaiting approval."}
 
 @app.post("/login")
 async def login(query: AuthQuery):
-    user = query_db("SELECT * FROM users WHERE username = ?", (query.username,), one=True)
+    username_clean = query.username.strip()
+    user = query_db("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username_clean,), one=True)
     if not user or not verify_password(query.password, user['password']):
         return {"success": False, "message": "Invalid username or password."}
     if not user['is_approved']:
@@ -765,7 +783,150 @@ async def upload_guideline(file: UploadFile = File(...)):
         chunks = [content_text[i:i+1000] for i in range(0, len(content_text), 1000)]
         for i, chunk in enumerate(chunks):
             collection.add(documents=[chunk], metadatas=[{"type": "guideline", "filename": file.filename, "chunk": i}], ids=[str(uuid.uuid4())])
+            
+        # Record uploaded guideline in SQLite guidelines table
+        query_db("INSERT OR IGNORE INTO guidelines (filename, uploaded_at) VALUES (?, ?)", 
+                 (file.filename, datetime.now().isoformat()), commit=True)
+                 
         return {"success": True, "message": f"Uploaded {file.filename}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/admin/guidelines")
+async def get_guidelines():
+    try:
+        # Check SQLite guidelines table
+        sql_guidelines = query_db("SELECT * FROM guidelines ORDER BY uploaded_at DESC")
+        if not sql_guidelines:
+            # Fallback guidelines synchronization from ChromaDB metadata
+            try:
+                chroma_data = collection.get(where={"type": "guideline"})
+                unique_filenames = set()
+                if chroma_data and chroma_data.get("metadatas"):
+                    for meta in chroma_data["metadatas"]:
+                        if meta and meta.get("filename"):
+                            unique_filenames.add(meta["filename"])
+                
+                # Sync into SQLite guidelines list
+                for fname in unique_filenames:
+                    query_db("INSERT OR IGNORE INTO guidelines (filename, uploaded_at) VALUES (?, ?)", 
+                             (fname, datetime.now().isoformat()), commit=True)
+                sql_guidelines = query_db("SELECT * FROM guidelines ORDER BY uploaded_at DESC")
+            except Exception as chroma_err:
+                print(f"⚠️ Error syncing guidelines from Chroma: {chroma_err}")
+                
+        return {"success": True, "guidelines": sql_guidelines}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/report/monthly")
+async def get_monthly_report(month: Optional[str] = None, doctor_id: Optional[str] = None):
+    # Expected format: "YYYY-MM"
+    if not month:
+        month = datetime.now().strftime("%Y-%m")
+        
+    try:
+        # Fetch encounters in selected month
+        if doctor_id:
+            try:
+                doc_id_int = int(doctor_id)
+            except (ValueError, TypeError):
+                return {"success": False, "message": "Invalid doctor ID format."}
+            encounters = query_db(
+                """SELECT e.id, e.patient_id, e.doctor_id, e.created_at, e.structured_notes_json,
+                          p.patient_name, p.age, p.gender,
+                          u.first_name as doc_first, u.last_name as doc_last
+                   FROM encounters e
+                   JOIN patients p ON e.patient_id = p.id
+                   JOIN users u ON e.doctor_id = u.id
+                   WHERE e.created_at LIKE ? AND e.doctor_id = ?""",
+                (f"{month}%", doc_id_int)
+            )
+        else:
+            encounters = query_db(
+                """SELECT e.id, e.patient_id, e.doctor_id, e.created_at, e.structured_notes_json,
+                          p.patient_name, p.age, p.gender,
+                          u.first_name as doc_first, u.last_name as doc_last
+                   FROM encounters e
+                   JOIN patients p ON e.patient_id = p.id
+                   JOIN users u ON e.doctor_id = u.id
+                   WHERE e.created_at LIKE ?""",
+                (f"{month}%",)
+            )
+        
+        total_visits = len(encounters)
+        prescriptions_list = []
+        most_prescribed = {}
+        
+        for enc in encounters:
+            if enc["structured_notes_json"]:
+                try:
+                    notes = json.loads(enc["structured_notes_json"])
+                    prescs = notes.get("prescriptions", [])
+                    for pr in prescs:
+                        drug = pr.get("drug", "").strip()
+                        if drug:
+                            prescriptions_list.append({
+                                "patient_name": enc["patient_name"],
+                                "doctor_name": f"Dr. {enc['doc_first']} {enc['doc_last']}",
+                                "drug": drug,
+                                "dosage": pr.get("dosage", ""),
+                                "frequency": pr.get("frequency", ""),
+                                "duration": pr.get("duration", "")
+                            })
+                            most_prescribed[drug] = most_prescribed.get(drug, 0) + 1
+                except Exception:
+                    pass
+                    
+        # Sort top 5 most prescribed medications (kept for doctor-scoped reports)
+        sorted_drugs = sorted(most_prescribed.items(), key=lambda x: x[1], reverse=True)
+        top_drugs = [{"drug": k, "count": v} for k, v in sorted_drugs[:5]]
+        
+        # Aggregate stats by doctor
+        doctor_stats = {}
+        for enc in encounters:
+            doc_name = f"Dr. {enc['doc_first']} {enc['doc_last']}"
+            doctor_stats[doc_name] = doctor_stats.get(doc_name, 0) + 1
+        doc_summary = [{"doctor_name": k, "visit_count": v} for k, v in doctor_stats.items()]
+        
+        # Aggregate stats by date
+        date_stats = {}
+        for enc in encounters:
+            date_str = enc["created_at"][:10]
+            date_stats[date_str] = date_stats.get(date_str, 0) + 1
+        date_summary = sorted([{"date": k, "visit_count": v} for k, v in date_stats.items()], key=lambda x: x["date"])
+        
+        # Unique patients seen this month
+        unique_patients = len(set(enc["patient_id"] for enc in encounters))
+        
+        # New patient registrations this month (admin-only metric)
+        new_reg_rows = query_db(
+            "SELECT COUNT(*) as cnt FROM patients WHERE created_at LIKE ?",
+            (f"{month}%",)
+        )
+        new_registrations = new_reg_rows[0]["cnt"] if new_reg_rows else 0
+        
+        return {
+            "success": True,
+            "month": month,
+            "summary": {
+                "total_visits": total_visits,
+                "unique_patients": unique_patients,
+                "new_registrations": new_registrations,
+                "total_prescriptions": len(prescriptions_list),
+                "top_drugs": top_drugs,
+                "doctor_summary": doc_summary,
+                "date_summary": date_summary
+            },
+            "visits_details": [
+                {
+                    "encounter_id": enc["id"],
+                    "patient_name": enc["patient_name"],
+                    "doctor_name": f"Dr. {enc['doc_first']} {enc['doc_last']}",
+                    "date": enc["created_at"][:16].replace("T", " ")
+                } for enc in encounters
+            ]
+        }
     except Exception as e:
         return {"success": False, "message": str(e)}
 
@@ -818,23 +979,27 @@ import sqlite3
 @app.put("/doctor/{doctor_id}/profile")
 async def update_doctor_profile(doctor_id: int, profile: ProfileUpdateQuery):
     try:
+        username_clean = profile.username.strip()
+        # Verify case-insensitive uniqueness excluding the current user
+        existing = query_db("SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?", (username_clean, doctor_id), one=True)
+        if existing:
+            return {"success": False, "message": "Username is already taken. Please choose another."}
+
         if profile.password:
             hashed = hash_password(profile.password)
             query_db("""
                 UPDATE users
                 SET username = ?, password = ?, first_name = ?, last_name = ?, id_number = ?, specialty = ?
                 WHERE id = ?
-            """, (profile.username, hashed, profile.first_name, profile.last_name, profile.id_number, profile.specialty, doctor_id), commit=True)
+            """, (username_clean, hashed, profile.first_name, profile.last_name, profile.id_number, profile.specialty, doctor_id), commit=True)
         else:
             query_db("""
                 UPDATE users
                 SET username = ?, first_name = ?, last_name = ?, id_number = ?, specialty = ?
                 WHERE id = ?
-            """, (profile.username, profile.first_name, profile.last_name, profile.id_number, profile.specialty, doctor_id), commit=True)
+            """, (username_clean, profile.first_name, profile.last_name, profile.id_number, profile.specialty, doctor_id), commit=True)
 
         return {"success": True, "message": "Profile updated successfully."}
-    except sqlite3.IntegrityError:
-        return {"success": False, "message": "Username is already taken. Please choose another."}
     except Exception as e:
         return {"success": False, "message": f"Error updating profile: {str(e)}"}
 

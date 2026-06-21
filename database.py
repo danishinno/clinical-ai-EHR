@@ -48,6 +48,15 @@ def init_db():
             FOREIGN KEY(patient_id) REFERENCES patients(id),
             FOREIGN KEY(doctor_id) REFERENCES users(id)
         )''')
+
+    # 4. Create Guidelines table (Tracks uploaded guidelines and clinical PDFs)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS guidelines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT UNIQUE,
+            uploaded_at TEXT
+        )''')
+    
     
     # Run structural database column migrations
     for col in ["first_name TEXT", "last_name TEXT", "id_number TEXT", "specialty TEXT"]:

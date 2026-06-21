@@ -7,6 +7,7 @@
     <title>Health Sync</title>
     <meta name="description" content="AI dictation scribe for structured clinical notes">
     <link rel="stylesheet" href="styles.css">
+    <script src="storage.js"></script>
     <!-- Marked.js for parsing markdown in AI responses -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="icon" type="image/png" href="favicon.png">
@@ -14,7 +15,8 @@
 
 <body>
     <div class="container">
-        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <header
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; position: relative; z-index: 500;">
             <div style="display: flex; align-items: center; gap: 15px;">
                 <img src="logo.png?v=2" alt="Logo"
                     style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: transparent;">
@@ -24,7 +26,7 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; position: relative;">
-                <button id="toggle-sidebar-btn" class="btn-toggle-sidebar" type="button">📋 Queue Sidebar</button>
+                <button id="toggle-sidebar-btn" class="btn-toggle-sidebar" type="button">Queue Sidebar</button>
                 <div style="position: relative; display: inline-block;">
                     <button id="menu-dots-btn" class="btn btn-secondary"
                         style="font-size: 1.2rem; padding: 0.2rem 0.8rem; line-height: 1; border-radius: 20px; position: relative;">⋯<span
@@ -45,7 +47,12 @@
                             style="border-bottom: 1px solid var(--border-color);"> Profile Settings</button>
                         <button id="history-btn" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Patient History</button>
-                        <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);"> Logout</button>
+                        <button id="report-btn" class="dropdown-item"
+                            style="border-bottom: 1px solid var(--border-color);"> Monthly Report</button>
+                        <button onclick="window.open('manual.html', '_blank')" class="dropdown-item"
+                            style="border-bottom: 1px solid var(--border-color);"> Help & Manual</button>
+                        <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);">
+                            Logout</button>
                     </div>
                 </div>
             </div>
@@ -60,8 +67,10 @@
                 <div class="demographics-item">ID: <strong id="banner-ic">--</strong></div>
             </div>
             <div class="safety-badges">
-                <div class="badge badge-danger" id="banner-allergies" contenteditable="true" title="Edit allergies">Allergies: None</div>
-                <div class="badge badge-warning" id="banner-vitals" contenteditable="true" title="Edit vitals">BP: 120/80 | HR: 72</div>
+                <div class="badge badge-danger" id="banner-allergies" contenteditable="true" title="Edit allergies">
+                    Allergies: None</div>
+                <div class="badge badge-warning" id="banner-vitals" contenteditable="true" title="Edit vitals">BP:
+                    120/80 | HR: 72</div>
             </div>
         </div>
 
@@ -72,7 +81,8 @@
                     <h2>Patient Queue</h2>
                 </div>
                 <div style="padding: 1.2rem; overflow-y: auto; flex-grow: 1;">
-                    <p style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">Patients on Hold</p>
+                    <p style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">
+                        Patients on Hold</p>
                     <div id="sidebar-queue-list">
                         <!-- Loaded dynamically -->
                         <p class="placeholder-text">No patients in queue.</p>
@@ -96,7 +106,8 @@
                             </div>
                         </div>
                         <div class="transcript-area">
-                            <p id="transcript-placeholder" class="placeholder-text">Click "Start Live Dictation" and begin speaking...</p>
+                            <p id="transcript-placeholder" class="placeholder-text">Click "Start Live Dictation" and
+                                begin speaking...</p>
                             <div id="transcript-content"></div>
                         </div>
                     </section>
@@ -130,19 +141,23 @@
                                     </div>
                                     <div class="data-field">
                                         <label>Gender</label>
-                                        <div class="value editable-field" id="val-gender" contenteditable="false">--</div>
+                                        <div class="value editable-field" id="val-gender" contenteditable="false">--
+                                        </div>
                                     </div>
                                     <div class="data-field">
                                         <label>Subjective (S)</label>
-                                        <div class="value editable-field" id="val-subjective" contenteditable="true">--</div>
+                                        <div class="value editable-field" id="val-subjective" contenteditable="true">--
+                                        </div>
                                     </div>
                                     <div class="data-field">
                                         <label>Objective (O)</label>
-                                        <div class="value editable-field" id="val-objective" contenteditable="true">--</div>
+                                        <div class="value editable-field" id="val-objective" contenteditable="true">--
+                                        </div>
                                     </div>
                                     <div class="data-field">
                                         <label>Assessment (A)</label>
-                                        <div class="value editable-field" id="val-assessment" contenteditable="true">--</div>
+                                        <div class="value editable-field" id="val-assessment" contenteditable="true">--
+                                        </div>
                                     </div>
                                     <div class="data-field">
                                         <label>Plan (P)</label>
@@ -154,7 +169,9 @@
                                 <div class="prescription-container">
                                     <div class="prescription-header">
                                         <h3>Prescriptions & Medications</h3>
-                                        <button id="add-prescription-btn" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 20px;" type="button">
+                                        <button id="add-prescription-btn" class="btn btn-secondary"
+                                            style="font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 20px;"
+                                            type="button">
                                             + Add Medication
                                         </button>
                                     </div>
@@ -191,9 +208,6 @@
             <div class="panel-header">
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <h2> Clinical Brain (CDS)</h2>
-                    <div id="cds-loading" class="hidden glow-loading">
-                        <span class="icon pulsing-brain">/span> Thinking...
-                    </div>
                 </div>
                 <button id="close-cds-btn" class="btn btn-secondary"
                     style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;"
@@ -211,6 +225,11 @@
                     <p>Ask a clinical question about the patient or use a Smart Suggestion.</p>
                 </div>
                 <!-- Chat bubbles will go here -->
+                <div id="cds-loading" class="chat-bubble ai-bubble typing-indicator hidden">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
             </div>
 
             <div class="chat-input-area">
@@ -298,7 +317,83 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Monthly Report Modal -->
+    <div id="report-modal" class="hidden"
+        style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; z-index: 1000;">
+        <div class="panel glass-panel"
+            style="width: 85%; max-width: 900px; height: 80vh; display: flex; flex-direction: column; padding: 2rem;">
+            <div class="panel-header"
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+                <h2 style="margin: 0; color: var(--primary-color);">Monthly Clinic Report</h2>
+                <button id="close-report-btn" class="btn btn-secondary"
+                    style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">✕</button>
+            </div>
+
+            <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem;">
+                <label style="font-weight: 600; font-size: 0.95rem;">Select Report Month:</label>
+                <input type="month" id="report-month-select"
+                    style="padding: 0.4rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.05); color: white;">
+                <button id="load-report-btn" class="btn btn-primary"
+                    style="padding: 0.4rem 1.2rem; font-size: 0.9rem; border-radius: 12px;">Generate Report</button>
+            </div>
+
+            <div style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2rem; padding-right: 0.5rem;"
+                id="report-modal-content">
+                <!-- Summary statistics row -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;">
+                    <div
+                        style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); text-align: center;">
+                        <h4
+                            style="margin: 0; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+                            Total Patient Visits</h4>
+                        <p id="report-total-visits"
+                            style="font-size: 3rem; font-weight: 700; color: var(--primary-color); margin-top: 0.5rem; font-family: 'DM Serif Display', serif;">
+                            0</p>
+                    </div>
+                    <div
+                        style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); text-align: center;">
+                        <h4
+                            style="margin: 0; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">
+                            Total Prescriptions Issued</h4>
+                        <p id="report-total-prescriptions"
+                            style="font-size: 3rem; font-weight: 700; color: var(--danger-color); margin-top: 0.5rem; font-family: 'DM Serif Display', serif;">
+                            0</p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
+                    <!-- Doctor metrics breakdown -->
+                    <div
+                        style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); display: flex; flex-direction: column; gap: 1rem;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: #ffffff;">Consultations by Medical Officer</h3>
+                        <div id="report-doctor-summary-list"
+                            style="display: flex; flex-direction: column; gap: 0.8rem;">
+                            <!-- Dynamically loaded -->
+                        </div>
+                    </div>
+                    <!-- Most prescribed medication list -->
+                    <div
+                        style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); display: flex; flex-direction: column; gap: 1rem;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: #ffffff;">Top Prescribed Medications</h3>
+                        <div id="report-top-drugs-list" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                            <!-- Dynamically loaded -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Patient Daily visits trend timeline -->
+                <div
+                    style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: var(--radius-lg); display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1rem;">
+                    <h3 style="margin: 0; font-size: 1.1rem; color: #ffffff;">Daily Consultations Breakdown</h3>
+                    <div id="report-daily-breakdown-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <!-- Dynamically loaded -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="html2pdf.bundle.min.js"></script>
     <script src="logo_base64.js?v=2"></script>
     <script src="app.js"></script>
 </body>

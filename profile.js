@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const userId = localStorage.getItem('user_id');
+    const userId = AppStorage.getItem('user_id');
     if (!userId) {
         window.location.href = 'login.html';
         return;
@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     backBtn.addEventListener('click', () => {
-        const role = localStorage.getItem('role');
+        const role = AppStorage.getItem('role');
         window.location.href = role === 'admin' ? 'admin.html' : 'index.html';
     });
 
@@ -46,22 +46,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.success) {
-                msgDiv.textContent = '✅ ' + data.message;
+                msgDiv.textContent = data.message;
                 msgDiv.className = 'success';
-                localStorage.setItem('username', payload.username);
+                AppStorage.setItem('username', payload.username);
                 if (payload.first_name) {
-                    localStorage.setItem('first_name', payload.first_name);
+                    AppStorage.setItem('first_name', payload.first_name);
                 } else {
-                    localStorage.removeItem('first_name');
+                    AppStorage.removeItem('first_name');
                 }
                 // Clear password field after save
                 document.getElementById('password').value = '';
             } else {
-                msgDiv.textContent = '❌ ' + data.message;
+                msgDiv.textContent = data.message;
                 msgDiv.className = 'error';
             }
         } catch (err) {
-            msgDiv.textContent = '❌ Network error.';
+            msgDiv.textContent = 'Network error.';
             msgDiv.className = 'error';
         } finally {
             saveBtn.disabled = false;
