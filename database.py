@@ -1,5 +1,4 @@
 import sqlite3
-import os
 
 DB_NAME = "clinical_data.db"
 
@@ -45,6 +44,8 @@ def init_db():
             structured_notes_json TEXT,
             doc_id TEXT,
             created_at TEXT,
+            additional_notes TEXT,
+            is_finalized INTEGER DEFAULT 0,
             FOREIGN KEY(patient_id) REFERENCES patients(id),
             FOREIGN KEY(doctor_id) REFERENCES users(id)
         )''')
@@ -55,6 +56,26 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT UNIQUE,
             uploaded_at TEXT
+        )''')
+
+    # 5. Create Medical Certificates table (Admin audit trail of all issued MCs)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS medical_certificates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            serial_number TEXT UNIQUE,
+            encounter_id INTEGER,
+            patient_id INTEGER,
+            doctor_id INTEGER,
+            patient_name TEXT,
+            ic_number TEXT,
+            diagnosis TEXT,
+            rest_start TEXT,
+            rest_end TEXT,
+            days_issued INTEGER,
+            issued_at TEXT,
+            html_content TEXT,
+            FOREIGN KEY(encounter_id) REFERENCES encounters(id),
+            FOREIGN KEY(doctor_id) REFERENCES users(id)
         )''')
     
     
@@ -67,6 +88,21 @@ def init_db():
             
     try:
         cursor.execute("ALTER TABLE patients ADD COLUMN ic_number TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE encounters ADD COLUMN additional_notes TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE encounters ADD COLUMN is_finalized INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("UPDATE encounters SET is_finalized = 1")
     except sqlite3.OperationalError:
         pass
 
@@ -104,7 +140,7 @@ def init_db():
                 except Exception:
                     pass
     except Exception as e:
-        print(f"⚠️ Error migrating patient ages: {e}")
+        print(f" Error migrating patient ages: {e}")
 
     # Transfer historical records from patients to encounters table if structured notes exist
     try:
@@ -115,8 +151,8 @@ def init_db():
                 cursor.execute("SELECT id FROM encounters WHERE doc_id = ?", (doc_id,))
                 if not cursor.fetchone():
                     cursor.execute('''
-                        INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at, is_finalized)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
                     ''', (p_id, dr_id, "Migrated historical consultation record.", notes_json, doc_id, created_at))
             else:
                 cursor.execute("SELECT id FROM encounters WHERE patient_id = ? AND created_at = ?", (p_id, created_at))
@@ -124,8 +160,8 @@ def init_db():
                     import uuid
                     new_doc_id = str(uuid.uuid4())
                     cursor.execute('''
-                        INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at, is_finalized)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
                     ''', (p_id, dr_id, "Migrated historical consultation record.", notes_json, new_doc_id, created_at))
         print("✅ Database migration and encounter sync complete.")
     except Exception as e:

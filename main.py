@@ -16,11 +16,54 @@ from datetime import datetime
 #database schema mapping
 init_db()
 
+import collections
+import sys
+
+log_history = collections.deque(maxlen=300)
+log_websockets = set()
+main_loop = None
+
+class TerminalLogRedirector:
+    def __init__(self, original):
+        self.original = original
+
+    def write(self, data):
+        self.original.write(data)
+        if data.strip():
+            msg = data.strip()
+            log_history.append(msg)
+            if log_websockets and main_loop:
+                try:
+                    main_loop.call_soon_threadsafe(
+                        lambda: asyncio.create_task(broadcast_log(msg))
+                    )
+                except Exception:
+                    pass
+
+    def flush(self):
+        self.original.flush()
+
+async def broadcast_log(msg: str):
+    for ws in list(log_websockets):
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            pass
+
+sys.stdout = TerminalLogRedirector(sys.stdout)
+sys.stderr = TerminalLogRedirector(sys.stderr)
+
 chroma_client = chromadb.PersistentClient(path="./medical_knowledge")
 collection = chroma_client.get_or_create_collection(name="clinical_docs")
 print("ChromaDB Memory initialized and ready.")
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    print("🚀 Live backend log monitor engine started and streaming...")
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,14 +127,19 @@ class ProfileUpdateQuery(BaseModel):
 class UpdateNotesQuery(BaseModel):
     encounter_id: int
     doc_id: Optional[str] = None
-    updated_notes: dict
+    updated_notes: Optional[dict] = None
     patient_name: str
+    additional_notes: Optional[str] = None
 
 class SaveEncounterQuery(BaseModel):
     doctor_id: int
     patient_id: Optional[int] = None
     transcript: str = ""
     structured_notes: dict
+
+class RefineNotesQuery(BaseModel):
+    current_notes: dict
+    additional_text: str
 
 
 class GuidelineQuery(BaseModel):
@@ -104,7 +152,20 @@ class GuidelineQuery(BaseModel):
 class CertificateQuery(BaseModel):
     encounter_id: int
     doctor_id: int
-    days_rest: Optional[int] = None 
+    days_rest: Optional[int] = None
+
+class SaveCertificateQuery(BaseModel):
+    serial_number: str
+    encounter_id: int
+    patient_id: int
+    doctor_id: int
+    patient_name: str
+    ic_number: Optional[str] = ""
+    diagnosis: str
+    rest_start: str
+    rest_end: str
+    days_issued: int
+    html_content: str
 
 # PHASE 1: ASYNCHRONOUS LIVE DICTATION
 @app.websocket("/live-transcribe")
@@ -124,7 +185,8 @@ async def websocket_endpoint(websocket: WebSocket):
             buffer_data,
             path_or_hf_repo="mlx-community/whisper-small-mlx-8bit",
             temperature=0.0,
-            initial_prompt="A clinical medical consultation. Patient: Saya sakit dada. Doctor: How long have you had this chest pain? Keywords: stable angina, chest discomfort, tightness, squeezing, physical exertion, shortness of breath, high cholesterol, heart attack."
+            language="en",
+            initial_prompt="A clinical medical consultation in English. Patient: I have chest pain. Doctor: How long have you had this chest pain? Keywords: stable angina, chest discomfort, tightness, squeezing, physical exertion, shortness of breath, high cholesterol, heart attack."
         )
         return result
 
@@ -195,9 +257,9 @@ async def process_dictation(query: ClinicalQuery):
     """
 
     try:
-        print("[Dictation Scribe] Calling medllama2 for JSON SOAP note extraction...")
+        print("[Dictation Scribe] Calling medgemma for JSON SOAP note extraction...")
         response = ollama.chat(
-            model='medllama2',
+            model='medgemma',
             messages=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': query.transcript}
@@ -259,7 +321,7 @@ async def process_dictation(query: ClinicalQuery):
 
     except Exception as e:
         print(f" [Dictation Scribe] Error during extraction: {e}")
-        return {"error": "Failed to process data with medllama2."}
+        return {"error": "Failed to process data with medgemma."}
 
 @app.put("/encounter/{encounter_id}/notes")
 async def update_encounter_notes(encounter_id: int, query: UpdateNotesQuery):
@@ -267,29 +329,102 @@ async def update_encounter_notes(encounter_id: int, query: UpdateNotesQuery):
     print(f" [Encounter Update] Edit request for Encounter ID: {encounter_id} | Patient Name: {query.patient_name}")
     print(f" -------------------------------------------------------------")
     try:
-        notes_to_save = {k: v for k, v in query.updated_notes.items() if not k.startswith('_')}
+        existing = query_db("SELECT structured_notes_json, is_finalized, additional_notes FROM encounters WHERE id = ?", (encounter_id,), one=True)
+        if not existing:
+            return {"success": False, "message": "Encounter not found."}
 
-        query_db(
-            "UPDATE encounters SET structured_notes_json = ? WHERE id = ?",
-            (json.dumps(notes_to_save), encounter_id),
-            commit=True
-        )
+        # Case 1: Saving additional notes (addendum)
+        if query.additional_notes is not None:
+            print(f" [Encounter Update] Appending addendum to Encounter ID {encounter_id}...")
+            query_db(
+                "UPDATE encounters SET additional_notes = ? WHERE id = ?",
+                (query.additional_notes, encounter_id),
+                commit=True
+            )
+            if query.doc_id:
+                document_text = f"Structured Notes: {existing['structured_notes_json']}\n\nAddendum: {query.additional_notes}"
+                try:
+                    collection.update(
+                        ids=[query.doc_id],
+                        documents=[document_text],
+                        metadatas=[{"patient_name": query.patient_name, "type": "encounter"}]
+                    )
+                except Exception as chroma_err:
+                    print(f"⚠️ [Encounter Update] ChromaDB update error: {chroma_err}")
+            return {"success": True, "message": "Addendum notes saved successfully."}
 
-        if query.doc_id:
-            document_text = f"Structured Notes (Updated by Doctor): {json.dumps(notes_to_save)}"
-            try:
-                collection.update(
-                    ids=[query.doc_id],
-                    documents=[document_text],
-                    metadatas=[{"patient_name": query.patient_name, "type": "encounter"}]
-                )
-            except Exception as chroma_err:
-                print(f"⚠️ [Encounter Update] ChromaDB update error: {chroma_err}")
+        # Case 2: Editing SOAP notes
+        if query.updated_notes is not None:
+            if existing['is_finalized'] == 1:
+                print(f" [Encounter Update] Blocked modification attempt on finalized SOAP notes for Encounter ID {encounter_id}.")
+                return {"success": False, "message": "Security compliance block: Finalized consultation notes cannot be altered. You may only append addendums."}
 
-        print(f" [Encounter Update] Notes updated successfully. ORIGINAL consultation timeframe preserved.")
-        return {"success": True, "message": "Encounter notes updated successfully."}
+            notes_to_save = {k: v for k, v in query.updated_notes.items() if not k.startswith('_')}
+
+            query_db(
+                "UPDATE encounters SET structured_notes_json = ?, is_finalized = 1 WHERE id = ?",
+                (json.dumps(notes_to_save), encounter_id),
+                commit=True
+            )
+
+            if query.doc_id:
+                document_text = f"Structured Notes (Finalized): {json.dumps(notes_to_save)}"
+                try:
+                    collection.update(
+                        ids=[query.doc_id],
+                        documents=[document_text],
+                        metadatas=[{"patient_name": query.patient_name, "type": "encounter"}]
+                    )
+                except Exception as chroma_err:
+                    print(f"⚠️ [Encounter Update] ChromaDB update error: {chroma_err}")
+
+            print(f" [Encounter Update] Notes updated and finalized successfully. ORIGINAL consultation timeframe preserved.")
+            return {"success": True, "message": "Encounter notes updated and finalized successfully."}
+
+        return {"success": False, "message": "No updates requested."}
     except Exception as e:
         print(f" [Encounter Update] Edit failed: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/encounter/refine")
+async def refine_encounter_notes(query: RefineNotesQuery):
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Clinical Refiner] Refining SOAP notes with additional text...")
+    print(f" -------------------------------------------------------------")
+    
+    system_prompt = """
+    You are a clinical AI assistant. You are given the current structured SOAP note in JSON format, and some additional details or corrections provided by the physician.
+    Your task is to merge the additional details into the correct categories (Subjective, Objective, Assessment, or Plan) of the existing SOAP note.
+    
+    Guidelines:
+    1. Do not lose or erase any existing clinical details unless the additional text explicitly contradicts or corrects them (e.g. changing blood pressure value or dosage).
+    2. Place new symptoms under 'subjective', physical signs/vitals under 'objective', diagnoses under 'assessment', and therapies/drugs/follow-up instructions under 'plan'.
+    3. Keep the output formatted strictly as a JSON object with these keys: "name", "age", "gender", "subjective", "objective", "assessment", "plan".
+    4. Do not include any explanation or meta-text. Return ONLY the JSON object.
+    """
+    
+    user_content = f"""
+    Current SOAP Note:
+    {json.dumps(query.current_notes, indent=2)}
+    
+    Additional Details / Corrections:
+    "{query.additional_text}"
+    """
+    
+    try:
+        response = ollama.chat(
+            model='medgemma',
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_content}
+            ],
+            format='json'
+        )
+        updated_notes = json.loads(response['message']['content'])
+        print(" [Clinical Refiner] Refinement complete.")
+        return {"success": True, "updated_notes": updated_notes}
+    except Exception as e:
+        print(f" [Clinical Refiner] Error during refinement: {e}")
         return {"success": False, "message": str(e)}
 
 @app.post("/encounter/save")
@@ -344,7 +479,7 @@ async def save_encounter(query: SaveEncounterQuery):
 
         print(" [Manual Save] Inserting new consultation row in encounters database table...")
         encounter_id = query_db(
-            "INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO encounters (patient_id, doctor_id, transcript, structured_notes_json, doc_id, created_at, is_finalized) VALUES (?, ?, ?, ?, ?, ?, 1)",
             (patient_id, query.doctor_id, query.transcript or "Manually entered clinical note.", json.dumps(notes_to_save), doc_id, datetime.now().isoformat()),
             commit=True
         )
@@ -629,9 +764,9 @@ async def ask_guidelines(query: GuidelineQuery):
         print(" [Clinical Brain] llama3 generation complete.")
         return {"answer": response['message']['content'].strip()}
     except Exception as e:
-        print(f" [Clinical Brain] llama3 connection failed, falling back to medllama2: {e}")
-        response = ollama.chat(model='medllama2', messages=messages)
-        print(" [Clinical Brain] medllama2 fallback generation complete.")
+        print(f" [Clinical Brain] llama3 connection failed, falling back to medgemma: {e}")
+        response = ollama.chat(model='medgemma', messages=messages)
+        print(" [Clinical Brain] medgemma fallback generation complete.")
         return {"answer": response['message']['content'].strip()}
 
 # PHASE 4: DATE-LOCKED MEDICAL CERTIFICATES (FIXED FOR STRICT COMPLIANCE)
@@ -694,7 +829,42 @@ async def generate_certificate(query: CertificateQuery):
     except Exception as e:
         return {"success": False, "message": str(e)}
 
-# PHASE 5: ACCOUNT AUTHENTICATION & MANAGEMENT WITH OVERVIEW JOINS
+# Save issued MC to database for admin audit trail
+@app.post("/save-certificate")
+async def save_certificate(query: SaveCertificateQuery):
+    try:
+        query_db(
+            """INSERT OR IGNORE INTO medical_certificates
+               (serial_number, encounter_id, patient_id, doctor_id, patient_name, ic_number,
+                diagnosis, rest_start, rest_end, days_issued, issued_at, html_content)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                query.serial_number, query.encounter_id, query.patient_id, query.doctor_id,
+                query.patient_name, query.ic_number, query.diagnosis,
+                query.rest_start, query.rest_end, query.days_issued,
+                datetime.now().isoformat(), query.html_content
+            ),
+            commit=True
+        )
+        return {"success": True}
+    except Exception as e:
+        print(f" [MC Save] Error: {e}")
+        return {"success": False, "message": str(e)}
+
+# Admin: fetch all issued medical certificates
+@app.get("/admin/medical-certificates")
+async def get_all_certificates():
+    certs = query_db("""
+        SELECT mc.*, 
+               u.first_name as doc_first, u.last_name as doc_last, u.username as doc_username,
+               u.id_number as doc_id_number, u.specialty as doc_specialty
+        FROM medical_certificates mc
+        LEFT JOIN users u ON mc.doctor_id = u.id
+        ORDER BY mc.issued_at DESC
+    """)
+    return {"certificates": certs}
+
+
 @app.post("/signup")
 async def signup(query: SignupQuery):
     username_clean = query.username.strip()
@@ -753,6 +923,7 @@ async def get_doctor_patients(doctor_id: str):
     # Fetch all encounters across all doctors for patients assigned to this doctor or treated by them in the past
     encounters = query_db(
         """SELECT e.id as encounter_id, p.patient_name, e.doc_id, e.structured_notes_json, e.created_at,
+                  e.additional_notes, e.is_finalized,
                   u.first_name as doc_first, u.last_name as doc_last
            FROM encounters e 
            JOIN patients p ON e.patient_id = p.id 
@@ -1108,6 +1279,7 @@ async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
     # Retrieve all historic encounters across all doctors
     encounters = query_db("""
         SELECT e.id as encounter_id, e.structured_notes_json, e.created_at, e.transcript, e.doc_id,
+               e.additional_notes, e.is_finalized,
                u.first_name as doc_first, u.last_name as doc_last
         FROM encounters e
         JOIN users u ON e.doctor_id = u.id
@@ -1122,3 +1294,22 @@ async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
 async def get_all_patients():
     patients = query_db("SELECT id, patient_name, age, gender, ic_number FROM patients ORDER BY patient_name ASC")
     return {"patients": patients}
+
+@app.websocket("/backend-logs")
+async def backend_logs_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    log_websockets.add(websocket)
+    try:
+        # First send the existing history
+        for msg in list(log_history):
+            await websocket.send_text(msg)
+        # Keep connection open
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        if websocket in log_websockets:
+            log_websockets.remove(websocket)

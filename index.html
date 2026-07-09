@@ -33,16 +33,7 @@
                             id="queue-red-dot" class="queue-red-dot hidden"></span></button>
                     <div id="header-dropdown" class="dropdown-content hidden"
                         style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 260px; box-shadow: var(--shadow); border-radius: var(--radius-lg); border: 1px solid var(--border-color); z-index: 10;">
-                        <!-- Active Queue Section -->
-                        <div id="queue-section" class="hidden"
-                            style="border-bottom: 1px solid var(--border-color); padding: 0.8rem 1rem; max-height: 250px; overflow-y: auto;">
-                            <p
-                                style="margin: 0 0 0.5rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color); display: flex; align-items: center; gap: 5px;">
-                                Patients on Hold</p>
-                            <div id="queue-list">
-                                <!-- Patients on hold will load here -->
-                            </div>
-                        </div>
+
                         <button onclick="window.location.href='profile.html'" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Profile Settings</button>
                         <button id="history-btn" class="dropdown-item"
@@ -117,14 +108,6 @@
                             <h2>Structured Clinical Notes</h2>
                         </div>
                         <div class="notes-content-wrapper">
-                            <!-- Digital Signature Lock Overlay -->
-                            <div id="signature-stamp-overlay" class="signature-stamp-overlay hidden">
-                                <div class="signature-stamp">
-                                    <span>Digitally Signed</span>
-                                    <span class="signature-stamp-date" id="signature-stamp-date">16 Jun 2026</span>
-                                </div>
-                            </div>
-
                             <div class="notes-content" id="notes-content">
                                 <div id="loading-state" class="hidden">
                                     <div class="spinner"></div> Extracting data...
@@ -184,6 +167,18 @@
                                     </div>
                                     <div id="prescription-list" class="prescription-list">
                                         <!-- Prescription rows will load here -->
+                                    </div>
+                                </div>
+
+                                <!-- AI Refiner Section -->
+                                <div class="refiner-container" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.8rem;">
+                                    <h3 style="margin: 0; font-size: 1rem; color: #ffffff;">Add Manual Corrections / Additions</h3>
+                                    <textarea id="manual-additions-input" placeholder="Type any additional clinical details or corrections here... (e.g. 'Patient actually has BP 130/85 and add paracetamol for fever')" 
+                                        style="min-height: 80px; width: 100%; resize: vertical; padding: 0.8rem; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.05); color: var(--text-main); font-family: inherit; font-size: 0.95rem; border: 1px solid var(--border-color);"></textarea>
+                                    <div style="text-align: right;">
+                                        <button id="refine-soap-btn" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem 1.2rem;" type="button">
+                                            Integrate Notes
+                                        </button>
                                     </div>
                                 </div>
 
@@ -329,10 +324,28 @@
                     style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">✕</button>
             </div>
 
-            <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem;">
+            <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap;">
                 <label style="font-weight: 600; font-size: 0.95rem;">Select Report Month:</label>
-                <input type="month" id="report-month-select"
-                    style="padding: 0.4rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.05); color: white;">
+                <select id="report-month-picker"
+                    style="padding: 0.4rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: white; cursor:pointer;">
+                    <option value="01">January</option>
+                    <option value="02">February</option>
+                    <option value="03">March</option>
+                    <option value="04">April</option>
+                    <option value="05">May</option>
+                    <option value="06">June</option>
+                    <option value="07">July</option>
+                    <option value="08">August</option>
+                    <option value="09">September</option>
+                    <option value="10">October</option>
+                    <option value="11">November</option>
+                    <option value="12">December</option>
+                </select>
+                <select id="report-year-picker"
+                    style="padding: 0.4rem 0.8rem; border-radius: 12px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: white; cursor:pointer;">
+                </select>
+                <!-- Hidden input for JS compatibility -->
+                <input type="hidden" id="report-month-select">
                 <button id="load-report-btn" class="btn btn-primary"
                     style="padding: 0.4rem 1.2rem; font-size: 0.9rem; border-radius: 12px;">Generate Report</button>
             </div>

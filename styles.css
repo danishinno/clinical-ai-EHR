@@ -460,22 +460,24 @@ h2 {
 .copy-ehr-btn {
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.4rem;
     margin-top: 0.8rem;
-    background: white;
-    border: 1px solid var(--border-color);
-    padding: 0.3rem 0.6rem;
+    background: rgba(0, 122, 255, 0.08);
+    border: 1px solid rgba(0, 122, 255, 0.2);
+    padding: 0.4rem 0.8rem;
     font-size: 0.8rem;
-    border-radius: 6px;
+    font-weight: 600;
+    color: #007aff;
+    border-radius: 8px;
     cursor: pointer;
-    color: var(--text-muted);
     transition: all 0.2s;
 }
 
 .copy-ehr-btn:hover {
-    background: var(--primary-color);
+    background: #007aff;
     color: white;
-    border-color: var(--primary-color);
+    border-color: #007aff;
+    box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
 }
 
 .chat-input-area {
@@ -1121,7 +1123,7 @@ header {
 .typing-indicator span {
     width: 8px;
     height: 8px;
-    background-color: var(--text-muted);
+    background-color: #8e8e93; /* Apple system grey for contrast on white bubbles */
     border-radius: 50%;
     display: inline-block;
     animation: typing 1.4s infinite both;
@@ -1144,6 +1146,142 @@ header {
         transform: translateY(-4px);
         opacity: 1;
     }
+}
+
+/* Styling for Live Dev Log Console */
+.dev-console-toggle {
+    position: fixed;
+    bottom: 2rem;
+    left: 2rem;
+    background: #0d0e12;
+    border: 1px solid var(--border-color);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    z-index: 1000;
+    color: #4af626; /* Terminal green */
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+    backdrop-filter: blur(20px);
+}
+.dev-console-toggle:hover {
+    background: #161822;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(74, 246, 38, 0.2);
+}
+
+.dev-console-panel {
+    position: fixed;
+    bottom: 5.5rem;
+    left: 2rem;
+    width: 480px;
+    height: 350px;
+    background: rgba(10, 10, 12, 0.95);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.dev-console-panel.hidden {
+    display: none !important;
+}
+.dev-console-header {
+    background: #161822;
+    padding: 0.6rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.dev-console-header h3 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-family: 'Courier New', Courier, monospace;
+    color: #4af626;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.dev-console-pulse {
+    width: 8px;
+    height: 8px;
+    background: #4af626;
+    border-radius: 50%;
+    display: inline-block;
+    animation: devPulse 1.5s infinite;
+}
+@keyframes devPulse {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+}
+.dev-console-body {
+    flex: 1;
+    padding: 0.8rem;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.75rem;
+    color: #ffffff;
+    background: #090a0f;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.log-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.3;
+}
+.log-line.info { color: #8f92a1; }
+.log-line.sys { color: #4af626; }
+.log-line.warn { color: #ffbc00; }
+.log-line.err { color: #ff453a; }
+
+/* Styling for Addendum & Locked Notes */
+.addendum-box {
+    margin-top: 0.8rem;
+    padding: 0.8rem 1rem;
+    background: rgba(255, 186, 0, 0.05); /* Light orange warning tint */
+    border-left: 4px solid #ffbc00; /* Solid orange border */
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: #1d1d1f;
+    line-height: 1.4;
+    text-align: left;
+}
+
+.addendum-box strong {
+    color: #b27a00;
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.addendum-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 0.6rem;
+    margin-top: 0.5rem;
+    border-radius: 8px;
+    background: white;
+    color: #1d1d1f;
+    font-size: 0.85rem;
+    border: 1px solid #d1d1d6;
+    resize: vertical;
+    font-family: inherit;
 }
 
 

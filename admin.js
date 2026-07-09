@@ -16,13 +16,43 @@ document.addEventListener('DOMContentLoaded', () => {
     // Guidelines and Monthly Reports Initializations
     loadGuidelines();
     
-    const reportMonthSelect = document.getElementById('report-month-select');
-    if (reportMonthSelect) {
+    // ── Month / Year pickers ──────────────────────────────────────
+    const monthPicker = document.getElementById('report-month-picker');
+    const yearPicker  = document.getElementById('report-year-picker');
+    const hiddenMonth = document.getElementById('report-month-select');
+
+    if (monthPicker && yearPicker && hiddenMonth) {
         const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        reportMonthSelect.value = `${year}-${month}`;
+        const curYear  = now.getFullYear();
+        const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+        // Populate years: current year down to 2024
+        for (let y = curYear; y >= 2024; y--) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            if (y === curYear) opt.selected = true;
+            yearPicker.appendChild(opt);
+        }
+
+        // Pre-select current month
+        monthPicker.value = curMonth;
+
+        // Sync hidden input whenever either picker changes
+        const syncHidden = () => {
+            hiddenMonth.value = `${yearPicker.value}-${monthPicker.value}`;
+        };
+        monthPicker.addEventListener('change', () => {
+            syncHidden();
+            loadMonthlyReport(false);
+        });
+        yearPicker.addEventListener('change', () => {
+            syncHidden();
+            loadMonthlyReport(false);
+        });
+        syncHidden(); // initialise
     }
+
     loadMonthlyReport(false);
 
     const loadReportBtn = document.getElementById('load-report-btn');
@@ -166,10 +196,12 @@ async function loadOverview() {
         data.overview.forEach(dr => {
             const drDiv = document.createElement('div');
             drDiv.className = 'white-panel';
+            const displayName = dr.first_name ? `${dr.first_name} ${dr.last_name || ''}`.trim() : dr.username;
+            drDiv.setAttribute('data-doctor-name', displayName.toLowerCase());
 
             let patientsHtml = dr.patients.length > 0
                 ? dr.patients.map(p => `
-                    <div style="margin-top:0.5rem; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.5rem;">
+                    <div data-patient-name="${(p.patient_name||'').toLowerCase()}" style="margin-top:0.5rem; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <button class="history-btn" onclick="toggleNotes('admin-notes-${p.encounter_id}')" style="background:none; border:none; color:var(--primary-color); font-weight:600; cursor:pointer;">
                                 ▶ ${p.patient_name} (${new Date(p.created_at).toLocaleString()})
@@ -185,7 +217,6 @@ async function loadOverview() {
                   `).join('')
                 : '<p class="placeholder-text" style="margin-top:0.5rem; color:var(--text-muted);">No patients yet.</p>';
 
-            const displayName = dr.first_name ? `${dr.first_name} ${dr.last_name || ''}`.trim() : dr.username;
             drDiv.innerHTML = `
                 <h3 style="border-bottom:1px solid var(--border-color); padding-bottom:0.5rem; margin-top:0.5rem; color:var(--primary-color);">Dr. ${displayName}</h3>
                 ${patientsHtml}
@@ -196,6 +227,7 @@ async function loadOverview() {
         console.error('Error fetching overview', err);
     }
 }
+
 
 async function deleteEncounter(encounterId) {
     if (!confirm('Are you sure you want to permanently delete this patient record? This action cannot be undone.')) return;
@@ -335,6 +367,9 @@ async function loadPatientsList() {
 
 async function loadActiveQueue() {
     try {
+        if (!window.doctorsList) {
+            await loadQueueDoctors();
+        }
         const response = await fetch('http://127.0.0.1:8000/admin/active-queue');
         const data = await response.json();
         
@@ -348,8 +383,9 @@ async function loadActiveQueue() {
         
         data.queue.forEach(p => {
             const div = document.createElement('div');
+            div.setAttribute('data-queue-entry', '1');
             div.style.display = 'flex';
-            div.style.justify = 'space-between';
+            div.style.justifyContent = 'space-between';
             div.style.alignItems = 'center';
             div.style.padding = '1rem';
             div.style.background = 'rgba(255, 255, 255, 0.03)';
@@ -379,6 +415,9 @@ async function loadActiveQueue() {
             `;
             container.appendChild(div);
         });
+
+        // Update stat counters after rendering
+        if (typeof window.__updateQueueStats === 'function') window.__updateQueueStats();
     } catch (err) {
         console.error('Error loading active queue:', err);
     }
@@ -542,8 +581,19 @@ async function loadGuidelines() {
 }
 
 async function loadMonthlyReport(shouldDownload = false) {
-    const reportMonthSelect = document.getElementById('report-month-select');
-    const selectedMonth = reportMonthSelect ? reportMonthSelect.value : '';
+    const monthPicker = document.getElementById('report-month-picker');
+    const yearPicker  = document.getElementById('report-year-picker');
+    let selectedMonth = '';
+    if (monthPicker && yearPicker) {
+        const m = monthPicker.value || String(new Date().getMonth() + 1).padStart(2, '0');
+        const y = yearPicker.value  || new Date().getFullYear();
+        selectedMonth = `${y}-${m}`;
+    } else {
+        const reportMonthSelect = document.getElementById('report-month-select');
+        if (reportMonthSelect) {
+            selectedMonth = reportMonthSelect.value;
+        }
+    }
     const url = `http://127.0.0.1:8000/report/monthly` + (selectedMonth ? `?month=${selectedMonth}` : '');
     
     try {
@@ -755,3 +805,148 @@ async function downloadReportPDF(data, monthStr) {
     win.document.write(html);
     win.document.close();
 }
+
+// ─── Overview Live Search ─────────────────────────────────────────────────
+window.filterOverview = function(query) {
+    const q = (query || '').toLowerCase().trim();
+    const container = document.getElementById('overview-list');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.white-panel[data-doctor-name]');
+    cards.forEach(card => {
+        const doctorName = card.getAttribute('data-doctor-name') || '';
+        const patientRows = card.querySelectorAll('[data-patient-name]');
+
+        if (!q) {
+            // No query — show everything
+            card.style.display = '';
+            patientRows.forEach(row => row.style.display = '');
+            return;
+        }
+
+        const doctorMatches = doctorName.includes(q);
+
+        if (doctorMatches) {
+            // Doctor name matches — show whole card
+            card.style.display = '';
+            patientRows.forEach(row => row.style.display = '');
+        } else {
+            // Check if any patient matches
+            let anyPatientMatch = false;
+            patientRows.forEach(row => {
+                const pName = row.getAttribute('data-patient-name') || '';
+                if (pName.includes(q)) {
+                    row.style.display = '';
+                    anyPatientMatch = true;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+            card.style.display = anyPatientMatch ? '' : 'none';
+        }
+    });
+};
+
+// ─── MC Records ───────────────────────────────────────────────────────────
+window.loadMcRecords = async function() {
+    const container = document.getElementById('mc-records-container');
+    if (!container) return;
+    container.innerHTML = '<p class="placeholder-text">Loading…</p>';
+
+    try {
+        const res = await fetch('http://127.0.0.1:8000/admin/medical-certificates');
+        const data = await res.json();
+        const certs = data.certificates || [];
+
+        if (certs.length === 0) {
+            container.innerHTML = '<p class="placeholder-text">No medical certificates have been issued yet.</p>';
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px;';
+
+        table.innerHTML = `
+            <thead>
+                <tr style="border-bottom:2px solid var(--border-color);">
+                    <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Serial No</th>
+                    <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Patient</th>
+                    <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Issued By</th>
+                    <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Diagnosis</th>
+                    <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Rest Period</th>
+                    <th style="padding:10px 12px;text-align:center;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Days</th>
+                    <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Issued At</th>
+                    <th style="padding:10px 12px;text-align:center;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Action</th>
+                </tr>
+            </thead>
+            <tbody id="mc-records-tbody"></tbody>
+        `;
+
+        container.innerHTML = '';
+        container.appendChild(table);
+        const tbody = document.getElementById('mc-records-tbody');
+
+        certs.forEach((c, i) => {
+            const docName = c.doc_first
+                ? `Dr. ${c.doc_first} ${c.doc_last || ''}`.trim()
+                : c.doc_username || 'Unknown';
+
+            const issuedAt = c.issued_at
+                ? new Date(c.issued_at).toLocaleString('en-MY', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+                : '—';
+
+            const startFmt = c.rest_start ? new Date(c.rest_start).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+            const endFmt   = c.rest_end   ? new Date(c.rest_end).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+            const row = document.createElement('tr');
+            row.style.cssText = `border-bottom:1px solid var(--border-color);transition:background 0.15s;cursor:pointer;${i % 2 === 0 ? '' : 'background:rgba(255,255,255,0.02);'}`;
+            row.onmouseenter = () => row.style.background = 'rgba(0, 122, 255, 0.06)';
+            row.onmouseleave = () => row.style.background = i % 2 === 0 ? '' : 'rgba(255,255,255,0.02)';
+
+            row.innerHTML = `
+                <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:var(--primary-color);">${c.serial_number || '—'}</td>
+                <td style="padding:10px 12px;font-weight:600;color:var(--text-main);">${c.patient_name || '—'}<br><span style="font-size:11px;color:var(--text-muted);font-weight:400;">${c.ic_number || ''}</span></td>
+                <td style="padding:10px 12px;color:var(--text-main);">${docName}</td>
+                <td style="padding:10px 12px;color:var(--text-muted);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.diagnosis || ''}">${c.diagnosis || '—'}</td>
+                <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${startFmt} → ${endFmt}</td>
+                <td style="padding:10px 12px;text-align:center;font-weight:700;color:var(--text-main);">${c.days_issued ?? '—'}</td>
+                <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${issuedAt}</td>
+                <td style="padding:10px 12px;text-align:center;">
+                    <button onclick="previewMc(${c.id})" style="padding:5px 14px;border-radius:20px;border:1px solid var(--primary-color);background:transparent;color:var(--primary-color);font-size:12px;font-weight:600;cursor:pointer;">
+                        View
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Store certs globally for preview lookup
+        window._mcRecords = certs;
+
+    } catch (err) {
+        container.innerHTML = '<p class="placeholder-text" style="color:var(--danger-color);">Failed to load MC records.</p>';
+        console.error('MC Records load error:', err);
+    }
+};
+
+window.previewMc = function(certId) {
+    const cert = (window._mcRecords || []).find(c => c.id === certId);
+    if (!cert) return;
+
+    const modal = document.getElementById('mc-preview-modal');
+    const content = document.getElementById('mc-preview-content');
+    if (!modal || !content) return;
+
+    content.innerHTML = cert.html_content || '<p>No preview available.</p>';
+    modal.classList.remove('hidden');
+};
+
+// Close MC preview modal
+document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('close-mc-preview');
+    const modal = document.getElementById('mc-preview-modal');
+    if (closeBtn && modal) {
+        closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    }
+});

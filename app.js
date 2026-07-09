@@ -1,6 +1,9 @@
 const userId = AppStorage.getItem('user_id');
+const role = AppStorage.getItem('role');
 if (!userId) {
     window.location.href = 'login.html';
+} else if (role === 'admin') {
+    window.location.href = 'admin.html';
 }
 
 document.getElementById('dr-name-display').textContent = AppStorage.getItem('first_name') || AppStorage.getItem('username') || '';
@@ -42,8 +45,6 @@ const valAssessment = document.getElementById('val-assessment');
 const valPlan = document.getElementById('val-plan');
 
 const queueRedDot = document.getElementById('queue-red-dot');
-const queueSection = document.getElementById('queue-section');
-const queueList = document.getElementById('queue-list');
 
 let socket;
 let isRecording = false;
@@ -215,19 +216,19 @@ if (saveNotesBtn) {
                 const result = await response.json();
                 if (result.success) {
                     saveNotesBtn.innerHTML = '<span class="icon"></span> Saved';
+                    window.lockActiveWorkspace();
                     cdsHistory = [];
-                    window.triggerDigitallySignedState();
                     setTimeout(() => {
-                        saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
+                        saveNotesBtn.innerHTML = '<span class="icon"></span> Saved & Locked';
                     }, 2000);
                 } else {
                     alert('Error updating consultation: ' + result.message);
                     saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
+                    saveNotesBtn.disabled = false;
                 }
             } catch (err) {
                 alert('Failed to execute update sequence pipeline.');
                 saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
-            } finally {
                 saveNotesBtn.disabled = false;
             }
         } else if (currentPatientId) {
@@ -252,17 +253,18 @@ if (saveNotesBtn) {
                     currentDocId = result.doc_id;
 
                     saveNotesBtn.innerHTML = '<span class="icon"></span> Saved';
+                    window.lockActiveWorkspace();
                     cdsHistory = [];
-                    window.triggerDigitallySignedState();
 
                     if (typeof pollQueue === 'function') pollQueue();
 
                     setTimeout(() => {
-                        saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
+                        saveNotesBtn.innerHTML = '<span class="icon"></span> Saved & Locked';
                     }, 2000);
                 } else {
                     alert('Error creating consultation: ' + result.message);
                     saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
+                    saveNotesBtn.disabled = false;
                 }
             } catch (err) {
                 alert('Failed to create new manual consultation.');
@@ -270,6 +272,92 @@ if (saveNotesBtn) {
             } finally {
                 saveNotesBtn.disabled = false;
             }
+        }
+    });
+}
+
+const refineSoapBtn = document.getElementById('refine-soap-btn');
+const manualAdditionsInput = document.getElementById('manual-additions-input');
+
+if (refineSoapBtn && manualAdditionsInput) {
+    refineSoapBtn.addEventListener('click', async () => {
+        const text = manualAdditionsInput.value.trim();
+        if (!text) {
+            alert('Please enter some additions or corrections first.');
+            return;
+        }
+
+        try {
+            refineSoapBtn.disabled = true;
+            refineSoapBtn.innerText = 'Refining...';
+
+            const prescriptions = [];
+            document.querySelectorAll('.prescription-row').forEach(row => {
+                const drug = row.querySelector('.presc-drug').value.trim();
+                const dosage = row.querySelector('.presc-dosage').value.trim();
+                const freq = row.querySelector('.presc-freq').value.trim();
+                const dur = row.querySelector('.presc-duration').value.trim();
+                if (drug) {
+                    prescriptions.push({ drug, dosage, frequency: freq, duration: dur });
+                }
+            });
+
+            const currentNotes = {
+                name: valName.textContent.trim(),
+                age: valAge.textContent.trim(),
+                gender: valGender.textContent.trim(),
+                subjective: valSubjective.textContent.trim(),
+                objective: valObjective.textContent.trim(),
+                assessment: valAssessment.textContent.trim(),
+                plan: valPlan.textContent.trim(),
+                prescriptions: prescriptions
+            };
+
+            const response = await fetch('http://127.0.0.1:8000/encounter/refine', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    current_notes: currentNotes,
+                    additional_text: text
+                })
+            });
+
+            const result = await response.json();
+            if (result.success && result.updated_notes) {
+                const notes = result.updated_notes;
+                
+                // Update text fields
+                valName.textContent = notes.name || valName.textContent;
+                valAge.textContent = notes.age || valAge.textContent;
+                valGender.textContent = notes.gender || valGender.textContent;
+                valSubjective.textContent = notes.subjective || valSubjective.textContent;
+                valObjective.textContent = notes.objective || valObjective.textContent;
+                valAssessment.textContent = notes.assessment || valAssessment.textContent;
+                valPlan.textContent = notes.plan || valPlan.textContent;
+
+                // Update Prescriptions if returned
+                if (notes.prescriptions) {
+                    const prescList = document.getElementById('prescription-list');
+                    if (prescList) {
+                        prescList.innerHTML = '';
+                        notes.prescriptions.forEach(p => {
+                            window.addPrescriptionRow(p.drug, p.dosage, p.frequency, p.duration);
+                        });
+                    }
+                }
+
+                // Clear input
+                manualAdditionsInput.value = '';
+                alert('SOAP notes updated successfully!');
+            } else {
+                alert('Failed to refine notes: ' + (result.message || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Error refining SOAP notes:', err);
+            alert('Network error while refining notes.');
+        } finally {
+            refineSoapBtn.disabled = false;
+            refineSoapBtn.innerText = 'Integrate Notes';
         }
     });
 }
@@ -478,6 +566,13 @@ async function fetchAndRenderHistory() {
                 const isToday = createdTime.toDateString() === now.toDateString();
                 const canGenerateMC = isToday && (diffHours <= 2);
 
+                const addendumHtml = p.additional_notes ? `
+                    <div class="addendum-box">
+                        <strong>Addendum / Additional Notes</strong>
+                        ${p.additional_notes.replace(/\n/g, '<br>')}
+                    </div>
+                ` : '';
+
                 rowDiv.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; cursor: pointer;"
                          onclick="toggleConsultationDetails('notes-${p.encounter_id}', this)">
@@ -498,14 +593,26 @@ async function fetchAndRenderHistory() {
                                  MC
                             </button>
                             `}
+                            ${p.is_finalized === 1 ? `
+                            <button onclick="toggleAddendumEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
+                                style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
+                                 Add Addendum
+                            </button>
+                            ` : `
                             <button onclick="toggleInlineEdit(${p.encounter_id}, '${p.doc_id || ''}', this)" class="btn btn-secondary"
                                 style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-radius: 20px; color: black; background: #e5e5ea; border:none; cursor:pointer;">
                                  Edit Note
                             </button>
+                            `}
                         </div>
                     </div>
                     <div id="notes-${p.encounter_id}" style="display:none; padding:0.8rem; background:rgba(255,255,255,0.9); border-radius:8px; color: #1d1d1f;">
                         ${formatJsonStr(p.structured_notes_json)}
+                        ${addendumHtml}
+                        <div id="addendum-edit-area-${p.encounter_id}" style="display:none; margin-top:0.8rem; padding-top:0.8rem; border-top:1px solid #e5e5e5; text-align: left;">
+                            <label style="font-size:0.8rem; font-weight:600; color:#555; display: block; margin-bottom: 0.3rem;">Append Additional Consultation Notes / Addendum:</label>
+                            <textarea id="addendum-input-${p.encounter_id}" class="addendum-textarea" placeholder="Type additional medical findings or notes here...">${p.additional_notes || ''}</textarea>
+                        </div>
                     </div>
                 `;
                 rowsContainer.appendChild(rowDiv);
@@ -716,6 +823,9 @@ if (downloadMcBtn) {
 
         const docName = `${docFirstName} ${docLastName}`.trim();
 
+        const serialSuffix = Math.floor(1000 + Math.random() * 9000);
+        const serialNumber = `HS-MC-${encounter.encounter_id}-${serialSuffix}`;
+
         const element = document.createElement('div');
         element.style.padding = '35px';
         element.style.fontFamily = "'DM Serif Display', serif";
@@ -740,7 +850,7 @@ if (downloadMcBtn) {
                 </div>
                 <div style="text-align: right;">
                     <h2 style="margin: 0; font-size: 18px; color: #2b6cb0; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Medical Certificate</h2>
-                    <p style="margin: 3px 0 0 0; font-size: 11px; color: #718096; font-family: 'DM Serif Display', serif;">Serial No: HS-MC-${encounter.encounter_id}-${Math.floor(1000 + Math.random() * 9000)}</p>
+                    <p style="margin: 3px 0 0 0; font-size: 11px; color: #718096; font-family: 'DM Serif Display', serif;">Serial No: HS-MC-${encounter.encounter_id}-${serialSuffix}</p>
                 </div>
             </div>
 
@@ -826,6 +936,29 @@ ${element.outerHTML}
             }
             win.document.write(mcHtml);
             win.document.close();
+
+            // ── Silently save MC to DB for admin audit trail ──
+            try {
+                await fetch('http://127.0.0.1:8000/save-certificate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        serial_number: serialNumber,
+                        encounter_id: encounter.encounter_id,
+                        patient_id: encounter.patient_id || currentPatientId || 0,
+                        doctor_id: parseInt(userId),
+                        patient_name: patientName,
+                        ic_number: notes.ic_number || '',
+                        diagnosis: reasonVal,
+                        rest_start: startDateVal,
+                        rest_end: endDateVal,
+                        days_issued: diffDays,
+                        html_content: element.outerHTML
+                    })
+                });
+            } catch (saveErr) {
+                console.warn('[MC] Could not save certificate to audit log:', saveErr);
+            }
 
             downloadMcBtn.innerText = ' Download Complete';
             setTimeout(() => {
@@ -920,28 +1053,11 @@ async function pollQueue() {
 
         if (data.patients && data.patients.length > 0) {
             if (statsCount) statsCount.innerText = data.patients.length;
-            queueRedDot.classList.remove('hidden');
-            queueSection.classList.remove('hidden');
+            if (queueRedDot) queueRedDot.classList.remove('hidden');
 
-            queueList.innerHTML = '';
             if (sidebarList) sidebarList.innerHTML = '';
 
             data.patients.forEach(p => {
-                // Render to dropdown list
-                const item = document.createElement('div');
-                item.className = 'queue-patient-item';
-                item.innerHTML = `
-                    <div class="queue-patient-info">
-                        <span class="queue-patient-name">${p.patient_name}</span>
-                        <span class="queue-patient-meta">${p.age} y/o, ${p.gender} | ID: ${p.ic_number}</span>
-                    </div>
-                `;
-                item.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    loadPatient(p);
-                });
-                queueList.appendChild(item);
-
                 // Render to sidebar list
                 if (sidebarList) {
                     const sbItem = document.createElement('div');
@@ -961,9 +1077,7 @@ async function pollQueue() {
             });
         } else {
             if (statsCount) statsCount.innerText = '0';
-            queueRedDot.classList.add('hidden');
-            queueSection.classList.add('hidden');
-            queueList.innerHTML = '';
+            if (queueRedDot) queueRedDot.classList.add('hidden');
             if (sidebarList) {
                 sidebarList.innerHTML = '<p class="placeholder-text">No patients in queue.</p>';
             }
@@ -1060,50 +1174,116 @@ if (addPrescBtn) {
     });
 }
 
-window.triggerDigitallySignedState = function() {
-    const overlay = document.getElementById('signature-stamp-overlay');
-    if (overlay) {
-        const stampDate = document.getElementById('signature-stamp-date');
-        if (stampDate) {
-            stampDate.textContent = new Date().toLocaleDateString('en-US', {
-                year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-            });
-        }
-        overlay.classList.remove('hidden');
-    }
-    // Lock note fields
-    ['val-subjective', 'val-objective', 'val-assessment', 'val-plan'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.setAttribute('contenteditable', 'false');
-    });
-    // Lock prescription inputs
-    document.querySelectorAll('.prescription-row input').forEach(input => {
-        input.disabled = true;
-    });
-    document.querySelectorAll('.delete-presc-btn').forEach(btn => {
-        btn.style.display = 'none';
-    });
-    const addPrescBtnEl = document.getElementById('add-prescription-btn');
-    if (addPrescBtnEl) addPrescBtnEl.style.display = 'none';
-};
+
 
 window.unlockConsultationWorkspace = function() {
-    const overlay = document.getElementById('signature-stamp-overlay');
-    if (overlay) {
-        overlay.classList.add('hidden');
-    }
-    // Unlock note fields
+    // Ensure SOAP fields are always editable
     ['val-subjective', 'val-objective', 'val-assessment', 'val-plan'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.setAttribute('contenteditable', 'true');
     });
-    // Enable prescription additions
+    // Re-enable prescription additions
     const addPrescBtnEl = document.getElementById('add-prescription-btn');
     if (addPrescBtnEl) addPrescBtnEl.style.display = 'inline-flex';
-    
     // Clear prescriptions
     const prescList = document.getElementById('prescription-list');
     if (prescList) prescList.innerHTML = '';
+    
+    // Unlock refiner input and buttons
+    const refineBtn = document.getElementById('refine-soap-btn');
+    if (refineBtn) refineBtn.disabled = false;
+    const refineInput = document.getElementById('manual-additions-input');
+    if (refineInput) {
+        refineInput.disabled = false;
+        refineInput.value = '';
+    }
+    const saveNotesBtn = document.getElementById('save-notes-btn');
+    if (saveNotesBtn) {
+        saveNotesBtn.disabled = false;
+        saveNotesBtn.style.opacity = '1';
+        saveNotesBtn.style.cursor = 'pointer';
+        saveNotesBtn.innerHTML = '<span class="icon"></span> Save Consultation';
+    }
+};
+
+window.lockActiveWorkspace = function() {
+    // Lock SOAP fields
+    ['val-subjective', 'val-objective', 'val-assessment', 'val-plan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.setAttribute('contenteditable', 'false');
+    });
+    // Hide prescription buttons
+    const addPrescBtnEl = document.getElementById('add-prescription-btn');
+    if (addPrescBtnEl) addPrescBtnEl.style.display = 'none';
+    document.querySelectorAll('.delete-presc-btn').forEach(btn => btn.style.display = 'none');
+    // Lock prescription input fields
+    document.querySelectorAll('.prescription-row input').forEach(input => input.disabled = true);
+    // Disable manual refiner
+    const refineBtn = document.getElementById('refine-soap-btn');
+    if (refineBtn) refineBtn.disabled = true;
+    const refineInput = document.getElementById('manual-additions-input');
+    if (refineInput) refineInput.disabled = true;
+    // Disable save notes button
+    const saveNotesBtn = document.getElementById('save-notes-btn');
+    if (saveNotesBtn) {
+        saveNotesBtn.disabled = true;
+        saveNotesBtn.style.opacity = '0.5';
+        saveNotesBtn.style.cursor = 'not-allowed';
+    }
+};
+
+window.toggleAddendumEdit = async function (encounterId, docId, btnElement) {
+    const notesContainer = document.getElementById(`notes-${encounterId}`);
+    if (!notesContainer) return;
+
+    const editArea = document.getElementById(`addendum-edit-area-${encounterId}`);
+    const inputField = document.getElementById(`addendum-input-${encounterId}`);
+    if (!editArea || !inputField) return;
+
+    if (btnElement.textContent.includes('Save Addendum')) {
+        btnElement.innerHTML = 'Saving...';
+        btnElement.disabled = true;
+
+        const textValue = inputField.value.trim();
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/encounter/${encounterId}/notes`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    encounter_id: encounterId,
+                    doc_id: docId || null,
+                    patient_name: valName.textContent || 'Unknown Patient',
+                    additional_notes: textValue
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                btnElement.innerHTML = 'Add Addendum';
+                btnElement.style.color = 'black';
+                btnElement.style.background = '#e5e5ea';
+                editArea.style.display = 'none';
+                await fetchAndRenderHistory();
+            } else {
+                alert('Error saving addendum: ' + data.message);
+                btnElement.innerHTML = 'Save Addendum';
+            }
+        } catch (err) {
+            alert('Failed to save addendum notes.');
+            btnElement.innerHTML = 'Save Addendum';
+        } finally {
+            btnElement.disabled = false;
+        }
+    } else {
+        editArea.style.display = 'block';
+        btnElement.innerHTML = 'Save Addendum';
+        btnElement.style.color = 'white';
+        btnElement.style.background = '#28a745';
+        if (notesContainer.style.display === 'none') {
+            notesContainer.style.display = 'block';
+        }
+        inputField.focus();
+    }
 };
 
 // --- Monthly Report Modal Logic ---
@@ -1113,12 +1293,30 @@ const closeReportBtn = document.getElementById('close-report-btn');
 const loadReportBtn = document.getElementById('load-report-btn');
 const reportMonthSelect = document.getElementById('report-month-select');
 
-// Set default month in selector to current month
-if (reportMonthSelect) {
+// ── Month / Year pickers (Report Modal) ──────────────────────────────────
+const reportMonthPicker = document.getElementById('report-month-picker');
+const reportYearPicker  = document.getElementById('report-year-picker');
+
+if (reportMonthPicker && reportYearPicker) {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    reportMonthSelect.value = `${year}-${month}`;
+    const curYear  = now.getFullYear();
+    const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+    // Populate years: current year down to 2024
+    for (let y = curYear; y >= 2024; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        if (y === curYear) opt.selected = true;
+        reportYearPicker.appendChild(opt);
+    }
+
+    // Pre-select current month
+    reportMonthPicker.value = curMonth;
+
+    // Reload report automatically on selection change
+    reportMonthPicker.addEventListener('change', () => window.loadMonthlyReport(false));
+    reportYearPicker.addEventListener('change', () => window.loadMonthlyReport(false));
 }
 
 if (reportBtn) {
@@ -1143,7 +1341,16 @@ if (loadReportBtn) {
 }
 
 window.loadMonthlyReport = async function(shouldDownload = false) {
-    const selectedMonth = reportMonthSelect ? reportMonthSelect.value : '';
+    // Read directly from dropdowns — no hidden input sync needed
+    let selectedMonth = '';
+    if (reportMonthPicker && reportYearPicker) {
+        const m = reportMonthPicker.value || String(new Date().getMonth() + 1).padStart(2, '0');
+        const y = reportYearPicker.value  || new Date().getFullYear();
+        selectedMonth = `${y}-${m}`;
+    } else if (reportMonthSelect) {
+        selectedMonth = reportMonthSelect.value;
+    }
+
     let url = `http://127.0.0.1:8000/report/monthly`;
     const params = [];
     if (selectedMonth) {
@@ -1390,3 +1597,93 @@ async function downloadReportPDF(data, monthStr) {
 // Start queue polling
 pollQueue();
 setInterval(pollQueue, 10000);
+
+// Live Developer Console / Backend log monitor
+function initDevLogConsole() {
+    const container = document.createElement('div');
+    container.innerHTML = `
+        <div id="dev-console-toggle" class="dev-console-toggle" title="Toggle Backend Dev Monitor">
+            <span class="dev-console-pulse"></span>
+            LOGS
+        </div>
+        <div id="dev-console-panel" class="dev-console-panel hidden">
+            <div class="dev-console-header">
+                <h3><span class="dev-console-pulse"></span> Live Backend Monitor</h3>
+                <button id="close-dev-console-btn" style="background:none; border:none; color:#8f92a1; font-size:1.1rem; cursor:pointer; font-weight:bold; padding: 0;">✕</button>
+            </div>
+            <div id="dev-console-body" class="dev-console-body">
+                <div class="log-line sys">[SYSTEM] Connecting to backend log server...</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(container);
+
+    const toggleBtn = document.getElementById('dev-console-toggle');
+    const panel = document.getElementById('dev-console-panel');
+    const closeBtn = document.getElementById('close-dev-console-btn');
+    const consoleBody = document.getElementById('dev-console-body');
+
+    toggleBtn.addEventListener('click', () => {
+        panel.classList.toggle('hidden');
+        if (!panel.classList.contains('hidden')) {
+            consoleBody.scrollTop = consoleBody.scrollHeight;
+        }
+    });
+
+    closeBtn.addEventListener('click', () => {
+        panel.classList.add('hidden');
+    });
+
+    let logSocket;
+    function connectLogs() {
+        // Connect to local loopback backend logs endpoint
+        logSocket = new WebSocket('ws://127.0.0.1:8000/backend-logs');
+
+        logSocket.onopen = () => {
+            appendLogLine('[SYSTEM] Connected to Live Backend Monitor.', 'sys');
+        };
+
+        logSocket.onmessage = (event) => {
+            const message = event.data;
+            if (message) {
+                let type = 'info';
+                if (message.includes('[Clinical Brain]') || message.includes('[Dictation Scribe]') || message.includes('[Encounter Update]') || message.includes('[Manual Save]') || message.includes('[Patient History API]')) {
+                    type = 'sys';
+                } else if (message.includes('Error') || message.includes('failed') || message.includes('Exception') || message.includes('FAIL') || message.includes('HTTPException')) {
+                    type = 'err';
+                } else if (message.includes('WARNING') || message.includes('⚠️')) {
+                    type = 'warn';
+                }
+                appendLogLine(message, type);
+            }
+        };
+
+        logSocket.onclose = () => {
+            appendLogLine('[SYSTEM] Connection lost. Reconnecting in 3s...', 'err');
+            setTimeout(connectLogs, 3000);
+        };
+
+        logSocket.onerror = () => {
+            logSocket.close();
+        };
+    }
+
+    function appendLogLine(text, type) {
+        const line = document.createElement('div');
+        line.className = `log-line ${type}`;
+        line.textContent = text;
+        consoleBody.appendChild(line);
+
+        while (consoleBody.childElementCount > 400) {
+            consoleBody.removeChild(consoleBody.firstChild);
+        }
+
+        consoleBody.scrollTop = consoleBody.scrollHeight;
+    }
+
+    connectLogs();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    initDevLogConsole();
+});
