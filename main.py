@@ -88,6 +88,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def read_root():
+    return {"status": "online", "message": "Clinical AI EHR API is running successfully!"}
+
+
 # Remove global Whisper model initialization since mlx-whisper handles model loading dynamically
 
 def hash_password(plain: str) -> str:
