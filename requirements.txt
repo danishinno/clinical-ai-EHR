@@ -7,4 +7,3 @@ python-multipart
 requests
 numpy
 openai
-openai-whisper

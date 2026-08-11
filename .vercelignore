@@ -1,0 +1,8 @@
+# Ignore Python backend files on Vercel static deployment
+requirements.txt
+main.py
+database.py
+test_backend.py
+.venv/
+clinical_data.db
+medical_knowledge/
