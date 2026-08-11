@@ -9,6 +9,17 @@
     <link rel="stylesheet" href="styles.css">
     <script src="config.js"></script>
     <script src="storage.js"></script>
+    <script>
+      (function() {
+        const uid = window.AppStorage ? window.AppStorage.getItem('user_id') : null;
+        const role = window.AppStorage ? window.AppStorage.getItem('role') : null;
+        if (!uid) {
+          window.location.replace('login.html');
+        } else if (role === 'admin') {
+          window.location.replace('admin.html');
+        }
+      })();
+    </script>
     <!-- Marked.js for parsing markdown in AI responses -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="icon" type="image/png" href="favicon.png">

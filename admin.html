@@ -8,6 +8,15 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
   <script src="config.js"></script>
   <script src="storage.js"></script>
+  <script>
+    (function() {
+      const uid = window.AppStorage ? window.AppStorage.getItem('user_id') : null;
+      const role = window.AppStorage ? window.AppStorage.getItem('role') : null;
+      if (!uid || role !== 'admin') {
+        window.location.replace('login.html');
+      }
+    })();
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
