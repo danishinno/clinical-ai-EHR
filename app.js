@@ -62,13 +62,58 @@ async function getGlobalStream() {
     return globalStream;
 }
 
+let speechRecognition = null;
+
 startBtn.addEventListener('click', async () => {
     if (isRecording) return;
 
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (SpeechRecognition) {
+        try {
+            speechRecognition = new SpeechRecognition();
+            speechRecognition.continuous = true;
+            speechRecognition.interimResults = true;
+            speechRecognition.lang = 'en-US';
+
+            speechRecognition.onstart = () => {
+                isRecording = true;
+                startBtn.classList.add('recording');
+                startBtn.innerHTML = '<span class="icon"></span> Recording...';
+                finishBtn.disabled = false;
+                transcriptPlaceholder.classList.add('hidden');
+            };
+
+            speechRecognition.onresult = (event) => {
+                let finalTranscript = '';
+                for (let i = 0; i < event.results.length; ++i) {
+                    finalTranscript += event.results[i][0].transcript;
+                }
+                transcriptContent.innerText = finalTranscript;
+                transcriptContent.parentElement.scrollTop = transcriptContent.parentElement.scrollHeight;
+            };
+
+            speechRecognition.onerror = (event) => {
+                console.error("Speech recognition error:", event.error);
+                if (event.error === 'not-allowed') {
+                    alert('Microphone access denied. Please click the lock/mic icon in your browser address bar to allow microphone access.');
+                }
+                stopRecordingUI();
+            };
+
+            speechRecognition.start();
+            return;
+
+        } catch (e) {
+            console.warn("Web Speech API error, falling back to WebSocket:", e);
+        }
+    }
+
     try {
         const stream = await getGlobalStream();
-        const wsHost = window.location.hostname || '127.0.0.1';
-        socket = new WebSocket(`ws://${wsHost}:8000/live-transcribe`);
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '127.0.0.1:8000' : window.location.host;
+        socket = new WebSocket(`${wsProtocol}//${wsHost}/live-transcribe`);
 
         socket.onopen = () => {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -79,7 +124,7 @@ startBtn.addEventListener('click', async () => {
             processor.connect(audioContext.destination);
 
             processor.onaudioprocess = (e) => {
-                if (socket.readyState === WebSocket.OPEN) {
+                if (socket && socket.readyState === WebSocket.OPEN) {
                     const float32Array = e.inputBuffer.getChannelData(0);
                     socket.send(float32Array.buffer);
                 }
@@ -109,13 +154,17 @@ startBtn.addEventListener('click', async () => {
 
         socket.onerror = () => { stopRecordingUI(); };
     } catch (err) {
-        alert('Microphone access hardware capture fault.');
+        alert('Microphone access denied. Please click the lock/mic icon in your browser address bar to allow microphone access.');
     }
 });
 
 finishBtn.addEventListener('click', async () => {
     if (!isRecording) return;
 
+    if (speechRecognition) {
+        try { speechRecognition.stop(); } catch(e){}
+        speechRecognition = null;
+    }
     if (window.localProcessor) window.localProcessor.disconnect();
     if (window.localAudioContext) window.localAudioContext.close();
     if (socket && socket.readyState === WebSocket.OPEN) socket.close();
