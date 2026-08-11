@@ -70,9 +70,53 @@ sys.stderr = TerminalLogRedirector(sys.stderr)
 
 chroma_client = chromadb.PersistentClient(path="./medical_knowledge")
 collection = chroma_client.get_or_create_collection(name="clinical_docs")
-print("ChromaDB Memory initialized and ready.")
-
 app = FastAPI()
+
+def call_llm_api(messages, preferred_model="llama3", json_format=False):
+    # 1. Check Cloud API Key (for Render Cloud deployment)
+    groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if groq_api_key:
+        try:
+            from openai import OpenAI
+            base_url = "https://api.groq.com/openai/v1" if os.getenv("GROQ_API_KEY") else None
+            client = OpenAI(api_key=groq_api_key, base_url=base_url)
+            model_name = "llama-3.3-70b-versatile" if os.getenv("GROQ_API_KEY") else "gpt-4o-mini"
+            kwargs = {"model": model_name, "messages": messages}
+            if json_format:
+                kwargs["response_format"] = {"type": "json_object"}
+            res = client.chat.completions.create(**kwargs)
+            return res.choices[0].message.content
+        except Exception as cloud_err:
+            print(f" [Clinical Brain] Cloud API Error: {cloud_err}")
+
+    # 2. Check Local Ollama
+    if HAS_OLLAMA and ollama is not None:
+        models_to_try = [preferred_model, "llama3", "llama3.2", "gemma:2b", "medgemma"]
+        for m in models_to_try:
+            try:
+                kwargs = {"model": m, "messages": messages}
+                if json_format:
+                    kwargs["format"] = "json"
+                res = ollama.chat(**kwargs)
+                if res and "message" in res and "content" in res["message"]:
+                    return res["message"]["content"]
+            except Exception:
+                continue
+
+    # 3. Safe Fallback Response if AI is offline
+    if json_format:
+        return json.dumps({
+            "name": None, "age": None, "ic_number": None,
+            "subjective": "AI service offline. Please start local Ollama or set GROQ_API_KEY.",
+            "objective": None, "assessment": None, "plan": None
+        })
+    
+    return (
+        "Clinical Brain is currently offline or unreachable. "
+        "Please ensure Ollama is running locally on your Mac (`ollama serve`) "
+        "or set `GROQ_API_KEY` in environment variables for cloud deployment."
+    )
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -277,17 +321,13 @@ async def process_dictation(query: ClinicalQuery):
     """
 
     try:
-        print("[Dictation Scribe] Calling medgemma for JSON SOAP note extraction...")
-        response = ollama.chat(
-            model='medgemma',
-            messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': query.transcript}
-            ],
-            format='json'
-        )
+        print("[Dictation Scribe] Calling LLM for JSON SOAP note extraction...")
+        raw_llm_content = call_llm_api([
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': query.transcript}
+        ], preferred_model='medgemma', json_format=True)
 
-        extracted_notes = json.loads(response['message']['content'])
+        extracted_notes = json.loads(raw_llm_content)
         
         if active_patient:
             patient_name = active_patient["patient_name"]
@@ -432,15 +472,11 @@ async def refine_encounter_notes(query: RefineNotesQuery):
     """
     
     try:
-        response = ollama.chat(
-            model='medgemma',
-            messages=[
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': user_content}
-            ],
-            format='json'
-        )
-        updated_notes = json.loads(response['message']['content'])
+        raw_llm_content = call_llm_api([
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_content}
+        ], preferred_model='medgemma', json_format=True)
+        updated_notes = json.loads(raw_llm_content)
         print(" [Clinical Refiner] Refinement complete.")
         return {"success": True, "updated_notes": updated_notes}
     except Exception as e:
@@ -643,38 +679,13 @@ async def ask_guidelines(query: GuidelineQuery):
         gemma_system_prompt = """You are an admin assistant. Answer the question using ONLY the provided PATIENTS list context.
         Note: Patients marked with '[ACTIVE]' are active patients in the queue. Patients marked with '[PAST]' are past patients."""
         gemma_user_prompt = f"PATIENTS:\n{my_patients_data}\n\nQUESTION:\n{question_text}"
-        try:
-            print(" [Clinical Brain] Dispatching ADMIN query to gemma:2b model...")
-            response = ollama.chat(model='gemma:2b', messages=[
-                {'role': 'system', 'content': gemma_system_prompt},
-                {'role': 'user', 'content': gemma_user_prompt}
-            ])
-            content = response['message']['content'].strip()
-            
-            # Check for generic refusals or model confusion in the response
-            refusal_keywords = ["cannot", "not provide", "no information", "don't have info", "unable to", "does not contain"]
-            if any(ref in content.lower() for ref in refusal_keywords):
-                print(" [Clinical Brain] gemma:2b returned a refusal, falling back to llama3 model...")
-                response = ollama.chat(model='llama3', messages=[
-                    {'role': 'system', 'content': gemma_system_prompt},
-                    {'role': 'user', 'content': gemma_user_prompt}
-                ])
-                content = response['message']['content'].strip()
-                
-            print(" [Clinical Brain] ADMIN response generated successfully.")
-            return {"answer": content}
-        except Exception as e:
-            print(f" [Clinical Brain] Gemma ADMIN error: {e}, falling back to llama3...")
-            try:
-                response = ollama.chat(model='llama3', messages=[
-                    {'role': 'system', 'content': gemma_system_prompt},
-                    {'role': 'user', 'content': gemma_user_prompt}
-                ])
-                print(" [Clinical Brain] llama3 fallback ADMIN response generated successfully.")
-                return {"answer": response['message']['content'].strip()}
-            except Exception as le:
-                print(f" [Clinical Brain] llama3 fallback ADMIN failed: {le}")
-                return {"answer": f"System Error: {str(le)}"}
+        print(" [Clinical Brain] Dispatching ADMIN query to LLM...")
+        content = call_llm_api([
+            {'role': 'system', 'content': gemma_system_prompt},
+            {'role': 'user', 'content': gemma_user_prompt}
+        ], preferred_model='gemma:2b').strip()
+        print(" [Clinical Brain] ADMIN response generated successfully.")
+        return {"answer": content}
 
     current_patient_history = []
     if query.patient_id:
@@ -778,16 +789,10 @@ async def ask_guidelines(query: GuidelineQuery):
 
     messages.append({'role': 'user', 'content': question_text})
 
-    try:
-        print(" [Clinical Brain] Dispatching CLINICAL query to llama3 model...")
-        response = ollama.chat(model='llama3', messages=messages)
-        print(" [Clinical Brain] llama3 generation complete.")
-        return {"answer": response['message']['content'].strip()}
-    except Exception as e:
-        print(f" [Clinical Brain] llama3 connection failed, falling back to medgemma: {e}")
-        response = ollama.chat(model='medgemma', messages=messages)
-        print(" [Clinical Brain] medgemma fallback generation complete.")
-        return {"answer": response['message']['content'].strip()}
+    print(" [Clinical Brain] Dispatching CLINICAL query to LLM...")
+    answer_text = call_llm_api(messages, preferred_model='llama3')
+    print(" [Clinical Brain] Generation complete.")
+    return {"answer": answer_text.strip()}
 
 # PHASE 4: DATE-LOCKED MEDICAL CERTIFICATES (FIXED FOR STRICT COMPLIANCE)
 @app.post("/generate-certificate")
@@ -844,8 +849,8 @@ async def generate_certificate(query: CertificateQuery):
     """
 
     try:
-        response = ollama.chat(model='llama3', messages=[{'role': 'user', 'content': prompt}])
-        return {"success": True, "certificate": response['message']['content'].strip()}
+        cert_content = call_llm_api([{'role': 'user', 'content': prompt}], preferred_model='llama3')
+        return {"success": True, "certificate": cert_content.strip()}
     except Exception as e:
         return {"success": False, "message": str(e)}
 
