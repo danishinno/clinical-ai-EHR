@@ -89,19 +89,43 @@ def call_llm_api(messages, preferred_model="llama3", json_format=False):
         except Exception as cloud_err:
             print(f" [Clinical Brain] Cloud API Error: {cloud_err}")
 
-    # 2. Check Local Ollama
+    # 2. Check Local Ollama Installed Tags
     if HAS_OLLAMA and ollama is not None:
-        models_to_try = [preferred_model, "llama3", "llama3.2", "gemma:2b", "medgemma"]
-        for m in models_to_try:
+        installed_models = []
+        try:
+            import requests
+            r = requests.get("http://127.0.0.1:11434/api/tags", timeout=1.5)
+            if r.status_code == 200:
+                installed_models = [m["name"] for m in r.json().get("models", [])]
+        except Exception:
+            pass
+
+        if installed_models:
+            # Match preferred model against installed tags
+            matched_model = None
+            pref_clean = preferred_model.split(":")[0].lower()
+            
+            for im in installed_models:
+                if im == preferred_model or im.startswith(preferred_model + ":"):
+                    matched_model = im
+                    break
+                if pref_clean in im.lower():
+                    matched_model = im
+                    break
+
+            if not matched_model:
+                gemma_models = [m for m in installed_models if "gemma" in m]
+                matched_model = gemma_models[0] if gemma_models else installed_models[0]
+
             try:
-                kwargs = {"model": m, "messages": messages}
+                kwargs = {"model": matched_model, "messages": messages}
                 if json_format:
                     kwargs["format"] = "json"
                 res = ollama.chat(**kwargs)
                 if res and "message" in res and "content" in res["message"]:
                     return res["message"]["content"]
-            except Exception:
-                continue
+            except Exception as oe:
+                print(f" [Clinical Brain] Ollama execution error on {matched_model}: {oe}")
 
     # 3. Safe Fallback Response if AI is offline
     if json_format:
