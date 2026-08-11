@@ -67,7 +67,8 @@ startBtn.addEventListener('click', async () => {
 
     try {
         const stream = await getGlobalStream();
-        socket = new WebSocket('ws://127.0.0.1:8000/live-transcribe');
+        const wsHost = window.location.hostname || '127.0.0.1';
+        socket = new WebSocket(`ws://${wsHost}:8000/live-transcribe`);
 
         socket.onopen = () => {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -127,7 +128,7 @@ finishBtn.addEventListener('click', async () => {
     loadingState.classList.remove('hidden');
 
     try {
-        const response = await fetch('http://127.0.0.1:8000/process-dictation', {
+        const response = await fetch('${window.API_BASE_URL}/process-dictation', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ doctor_id: userId, transcript: fullTranscript, patient_id: currentPatientId })
@@ -202,7 +203,7 @@ if (saveNotesBtn) {
             try {
                 saveNotesBtn.disabled = true;
                 saveNotesBtn.innerHTML = 'Saving...';
-                const response = await fetch(`http://127.0.0.1:8000/encounter/${currentEncounterId}/notes`, {
+                const response = await fetch(`${window.API_BASE_URL}/encounter/${currentEncounterId}/notes`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -236,7 +237,7 @@ if (saveNotesBtn) {
                 saveNotesBtn.disabled = true;
                 saveNotesBtn.innerHTML = 'Saving...';
 
-                const response = await fetch(`http://127.0.0.1:8000/encounter/save`, {
+                const response = await fetch(`${window.API_BASE_URL}/encounter/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -313,7 +314,7 @@ if (refineSoapBtn && manualAdditionsInput) {
                 prescriptions: prescriptions
             };
 
-            const response = await fetch('http://127.0.0.1:8000/encounter/refine', {
+            const response = await fetch('${window.API_BASE_URL}/encounter/refine', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -381,7 +382,7 @@ async function askClinicalBrain(question) {
     cdsLoading.classList.remove('hidden');
 
     try {
-        const response = await fetch('http://127.0.0.1:8000/ask-guidelines', {
+        const response = await fetch('${window.API_BASE_URL}/ask-guidelines', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -458,11 +459,11 @@ let activeHistoryTab = 'current'; // 'current' or 'past'
 async function fetchAndRenderHistory() {
     historyList.innerHTML = '<div class="spinner"></div> Loading dynamic encounters logs...';
     try {
-        let url = `http://127.0.0.1:8000/doctor/${userId}/patients`;
+        let url = `${window.API_BASE_URL}/doctor/${userId}/patients`;
         const filterByActive = currentPatientId && activeHistoryTab === 'current';
 
         if (filterByActive) {
-            url = `http://127.0.0.1:8000/patient/${currentPatientId}/history?doctor_id=${userId}`;
+            url = `${window.API_BASE_URL}/patient/${currentPatientId}/history?doctor_id=${userId}`;
         }
 
         const response = await fetch(url);
@@ -674,7 +675,7 @@ window.toggleInlineEdit = async function (encounterId, docId, btnElement) {
         });
 
         try {
-            const response = await fetch(`http://127.0.0.1:8000/encounter/${encounterId}/notes`, {
+            const response = await fetch(`${window.API_BASE_URL}/encounter/${encounterId}/notes`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -802,7 +803,7 @@ if (downloadMcBtn) {
         let docLastName = AppStorage.getItem('last_name') || 'Schrieber';
 
         try {
-            const drProfileResponse = await fetch(`http://127.0.0.1:8000/doctor/${userId}/profile`);
+            const drProfileResponse = await fetch(`${window.API_BASE_URL}/doctor/${userId}/profile`);
             const profileData = await drProfileResponse.json();
             if (profileData.success && profileData.profile) {
                 doctorIdNumber = profileData.profile.id_number || 'PR-88291-A';
@@ -939,7 +940,7 @@ ${element.outerHTML}
 
             // ── Silently save MC to DB for admin audit trail ──
             try {
-                await fetch('http://127.0.0.1:8000/save-certificate', {
+                await fetch('${window.API_BASE_URL}/save-certificate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1034,7 +1035,7 @@ let active_patient_details = null;
 async function pollQueue() {
     if (!userId) return;
     try {
-        const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/on-hold`);
+        const response = await fetch(`${window.API_BASE_URL}/doctor/${userId}/on-hold`);
         const data = await response.json();
 
         const sidebarList = document.getElementById('sidebar-queue-list');
@@ -1043,7 +1044,7 @@ async function pollQueue() {
 
         // Fetch completed consultations count dynamically
         try {
-            const historyResponse = await fetch(`http://127.0.0.1:8000/doctor/${userId}/patients`);
+            const historyResponse = await fetch(`${window.API_BASE_URL}/doctor/${userId}/patients`);
             const historyData = await historyResponse.json();
             const encounters = historyData.patients || historyData.encounters || [];
             if (completedCountEl) completedCountEl.innerText = encounters.length;
@@ -1246,7 +1247,7 @@ window.toggleAddendumEdit = async function (encounterId, docId, btnElement) {
 
         const textValue = inputField.value.trim();
         try {
-            const response = await fetch(`http://127.0.0.1:8000/encounter/${encounterId}/notes`, {
+            const response = await fetch(`${window.API_BASE_URL}/encounter/${encounterId}/notes`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1351,7 +1352,7 @@ window.loadMonthlyReport = async function(shouldDownload = false) {
         selectedMonth = reportMonthSelect.value;
     }
 
-    let url = `http://127.0.0.1:8000/report/monthly`;
+    let url = `${window.API_BASE_URL}/report/monthly`;
     const params = [];
     if (selectedMonth) {
         params.push(`month=${selectedMonth}`);

@@ -7,6 +7,7 @@
     <title>Health Sync</title>
     <meta name="description" content="AI dictation scribe for structured clinical notes">
     <link rel="stylesheet" href="styles.css">
+    <script src="config.js"></script>
     <script src="storage.js"></script>
     <!-- Marked.js for parsing markdown in AI responses -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -89,10 +90,10 @@
                             <h2>Live Dictation</h2>
                             <div class="controls">
                                 <button id="start-btn" class="btn btn-primary">
-                                    <span class="icon"></span> Start Live Dictation
+                                    Start
                                 </button>
                                 <button id="finish-btn" class="btn btn-secondary" disabled>
-                                    Finish Consultation
+                                    Finish
                                 </button>
                             </div>
                         </div>
@@ -171,12 +172,16 @@
                                 </div>
 
                                 <!-- AI Refiner Section -->
-                                <div class="refiner-container" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.8rem;">
-                                    <h3 style="margin: 0; font-size: 1rem; color: #ffffff;">Add Manual Corrections / Additions</h3>
-                                    <textarea id="manual-additions-input" placeholder="Type any additional clinical details or corrections here... (e.g. 'Patient actually has BP 130/85 and add paracetamol for fever')" 
+                                <div class="refiner-container"
+                                    style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.8rem;">
+                                    <h3 style="margin: 0; font-size: 1rem; color: #ffffff;">Add Manual Corrections /
+                                        Additions</h3>
+                                    <textarea id="manual-additions-input"
+                                        placeholder="Type any additional clinical details or corrections here... (e.g. 'Patient actually has BP 130/85 and add paracetamol for fever')"
                                         style="min-height: 80px; width: 100%; resize: vertical; padding: 0.8rem; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.05); color: var(--text-main); font-family: inherit; font-size: 0.95rem; border: 1px solid var(--border-color);"></textarea>
                                     <div style="text-align: right;">
-                                        <button id="refine-soap-btn" class="btn btn-secondary" style="font-size: 0.9rem; padding: 0.5rem 1.2rem;" type="button">
+                                        <button id="refine-soap-btn" class="btn btn-secondary"
+                                            style="font-size: 0.9rem; padding: 0.5rem 1.2rem;" type="button">
                                             Integrate Notes
                                         </button>
                                     </div>

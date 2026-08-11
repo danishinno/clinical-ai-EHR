@@ -110,6 +110,30 @@ document.addEventListener('DOMContentLoaded', () => {
         form.addEventListener('submit', handlePatientQueuing);
     }
 
+    // Patient Name: Restrict live input to letters and spaces only
+    const regNameInput = document.getElementById('reg-name');
+    if (regNameInput) {
+        regNameInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+        });
+    }
+
+    // IC Number: Restrict live input to numbers only (digits 0-9)
+    const regIcInput = document.getElementById('reg-ic');
+    if (regIcInput) {
+        regIcInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+    }
+
+    // Returning Patient Live Search Filter
+    const searchInput = document.getElementById('reg-patient-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            renderPatientsDropdown(e.target.value);
+        });
+    }
+
     document.getElementById('logout-btn').addEventListener('click', () => {
         AppStorage.clear();
         window.location.href = 'login.html';
@@ -120,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadPendingDoctors() {
     try {
-        const response = await fetch('http://127.0.0.1:8000/admin/pending');
+        const response = await fetch('${window.API_BASE_URL}/admin/pending');
         const data = await response.json();
 
         const list = document.getElementById('pending-list');
@@ -173,7 +197,7 @@ async function loadPendingDoctors() {
 
 async function approveDoctor(id) {
     try {
-        await fetch('http://127.0.0.1:8000/admin/approve', {
+        await fetch('${window.API_BASE_URL}/admin/approve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ doctor_id: id })
@@ -187,7 +211,7 @@ async function approveDoctor(id) {
 
 async function loadOverview() {
     try {
-        const response = await fetch('http://127.0.0.1:8000/admin/overview');
+        const response = await fetch('${window.API_BASE_URL}/admin/overview');
         const data = await response.json();
 
         const container = document.getElementById('overview-list');
@@ -233,7 +257,7 @@ async function deleteEncounter(encounterId) {
     if (!confirm('Are you sure you want to permanently delete this patient record? This action cannot be undone.')) return;
 
     try {
-        const response = await fetch(`http://127.0.0.1:8000/admin/patient/${encounterId}`, {
+        const response = await fetch(`${window.API_BASE_URL}/admin/patient/${encounterId}`, {
             method: 'DELETE'
         });
         const data = await response.json();
@@ -304,7 +328,7 @@ async function handleGuidelineUpload(e) {
         uploadBtn.textContent = 'Uploading & Parsing...';
         statusDiv.textContent = '';
 
-        const response = await fetch('http://127.0.0.1:8000/admin/upload-guideline', {
+        const response = await fetch('${window.API_BASE_URL}/admin/upload-guideline', {
             method: 'POST',
             body: formData
         });
@@ -332,7 +356,7 @@ async function handleGuidelineUpload(e) {
 // STATIC REGISTRATION AND QUEUING MODULES
 async function loadQueueDoctors() {
     try {
-        const response = await fetch('http://127.0.0.1:8000/admin/doctors');
+        const response = await fetch('${window.API_BASE_URL}/admin/doctors');
         const data = await response.json();
         
         const select = document.getElementById('reg-doctor-select');
@@ -349,17 +373,37 @@ async function loadQueueDoctors() {
     }
 }
 
+function renderPatientsDropdown(searchTerm = '') {
+    const select = document.getElementById('reg-patient-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- Choose a patient --</option>';
+    
+    const term = searchTerm.toLowerCase().trim();
+    const filtered = (window.allPatientsList || []).filter(p => {
+        if (!term) return true;
+        const pName = (p.patient_name || '').toLowerCase();
+        const pIc = (p.ic_number || '').toLowerCase();
+        return pName.includes(term) || pIc.includes(term);
+    });
+
+    filtered.forEach(p => {
+        select.innerHTML += `<option value="${p.id}" data-name="${p.patient_name}" data-age="${p.age}" data-gender="${p.gender}" data-ic="${p.ic_number}">${p.patient_name} (${p.age} y/o, ${p.gender}) - IC: ${p.ic_number}</option>`;
+    });
+
+    if (term && filtered.length === 0) {
+        select.innerHTML += `<option value="" disabled>No patients match "${searchTerm}"</option>`;
+    }
+}
+
 async function loadPatientsList() {
     try {
-        const response = await fetch('http://127.0.0.1:8000/admin/patients-list');
+        const response = await fetch('${window.API_BASE_URL}/admin/patients-list');
         const data = await response.json();
         
-        const select = document.getElementById('reg-patient-select');
-        select.innerHTML = '<option value="">-- Choose a patient --</option>';
-        
-        data.patients.forEach(p => {
-            select.innerHTML += `<option value="${p.id}" data-name="${p.patient_name}" data-age="${p.age}" data-gender="${p.gender}" data-ic="${p.ic_number}">${p.patient_name} (${p.age} y/o, ${p.gender}) - IC: ${p.ic_number}</option>`;
-        });
+        window.allPatientsList = data.patients || [];
+        const searchInput = document.getElementById('reg-patient-search');
+        renderPatientsDropdown(searchInput ? searchInput.value : '');
     } catch (err) {
         console.error('Error loading patients list:', err);
     }
@@ -370,7 +414,7 @@ async function loadActiveQueue() {
         if (!window.doctorsList) {
             await loadQueueDoctors();
         }
-        const response = await fetch('http://127.0.0.1:8000/admin/active-queue');
+        const response = await fetch('${window.API_BASE_URL}/admin/active-queue');
         const data = await response.json();
         
         const container = document.getElementById('live-queue-container');
@@ -425,7 +469,7 @@ async function loadActiveQueue() {
 
 window.reassignPatient = async function(patientId, doctorId) {
     try {
-        const response = await fetch('http://127.0.0.1:8000/admin/reassign-patient', {
+        const response = await fetch('${window.API_BASE_URL}/admin/reassign-patient', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ patient_id: patientId, doctor_id: parseInt(doctorId) })
@@ -457,10 +501,18 @@ async function handlePatientQueuing(e) {
         const gender = document.getElementById('reg-gender').value;
         const ic = document.getElementById('reg-ic').value.trim();
         
-        // Strict Alphanumeric check in frontend to reject special characters
-        const alphanumeric = /^[a-zA-Z0-9]+$/;
-        if (!alphanumeric.test(ic)) {
-            statusDiv.textContent = 'Access Denied: Patient ID / IC Number cannot contain special characters or spaces.';
+        // Strict check for Patient Name (letters and spaces only)
+        const nameRegex = /^[a-zA-Z\s]+$/;
+        if (!nameRegex.test(name)) {
+            statusDiv.textContent = 'Invalid Patient Name: Only letters and spaces are allowed (no numbers or special characters).';
+            statusDiv.style.color = 'red';
+            return;
+        }
+
+        // Strict Numeric check for IC Number (digits only)
+        const numeric = /^[0-9]+$/;
+        if (!numeric.test(ic)) {
+            statusDiv.textContent = 'Access Denied: Patient IC Number must contain numbers only (digits 0-9).';
             statusDiv.style.color = 'red';
             return;
         }
@@ -495,7 +547,7 @@ async function handlePatientQueuing(e) {
         submitBtn.textContent = 'Queuing Patient...';
         statusDiv.textContent = '';
         
-        const response = await fetch('http://127.0.0.1:8000/admin/register-patient', {
+        const response = await fetch('${window.API_BASE_URL}/admin/register-patient', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -536,7 +588,7 @@ async function loadGuidelines() {
     if (!listContainer) return;
     
     try {
-        const response = await fetch('http://127.0.0.1:8000/admin/guidelines');
+        const response = await fetch('${window.API_BASE_URL}/admin/guidelines');
         const data = await response.json();
         
         if (data.success && data.guidelines) {
@@ -594,7 +646,7 @@ async function loadMonthlyReport(shouldDownload = false) {
             selectedMonth = reportMonthSelect.value;
         }
     }
-    const url = `http://127.0.0.1:8000/report/monthly` + (selectedMonth ? `?month=${selectedMonth}` : '');
+    const url = `${window.API_BASE_URL}/report/monthly` + (selectedMonth ? `?month=${selectedMonth}` : '');
     
     try {
         const response = await fetch(url);
@@ -854,7 +906,7 @@ window.loadMcRecords = async function() {
     container.innerHTML = '<p class="placeholder-text">Loading…</p>';
 
     try {
-        const res = await fetch('http://127.0.0.1:8000/admin/medical-certificates');
+        const res = await fetch('${window.API_BASE_URL}/admin/medical-certificates');
         const data = await res.json();
         const certs = data.certificates || [];
 

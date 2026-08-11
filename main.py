@@ -1,10 +1,25 @@
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
-import mlx_whisper
+
+try:
+    import mlx_whisper
+    HAS_MLX_WHISPER = True
+except Exception:
+    mlx_whisper = None
+    HAS_MLX_WHISPER = False
+
 import numpy as np
-import ollama
+
+try:
+    import ollama
+    HAS_OLLAMA = True
+except Exception:
+    ollama = None
+    HAS_OLLAMA = False
+
 import json
 import chromadb
 import uuid
@@ -1185,9 +1200,13 @@ from fastapi import HTTPException
 
 @app.post("/admin/register-patient")
 async def register_patient(query: PatientRegisterQuery):
-    # Regex alphanumeric check for IC Number
-    if not re.match("^[a-zA-Z0-9]+$", query.ic_number):
-        return {"success": False, "message": "Access Denied: Patient ID / IC Number cannot contain special characters or spaces."}
+    # Regex check for Patient Name (letters and spaces only)
+    if not re.match(r"^[a-zA-Z\s]+$", query.patient_name.strip()):
+        return {"success": False, "message": "Invalid Patient Name: Only letters and spaces are allowed (no numbers or special characters)."}
+
+    # Regex numeric check for IC Number (digits only)
+    if not re.match(r"^[0-9]+$", query.ic_number.strip()):
+        return {"success": False, "message": "Access Denied: Patient IC Number must contain numbers only (digits 0-9)."}
 
     # Check if patient already exists
     existing = query_db("SELECT id FROM patients WHERE ic_number = ?", (query.ic_number,), one=True)

@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         try {
-            const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/profile`, {
+            const response = await fetch(`${window.API_BASE_URL}/doctor/${userId}/profile`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadProfile(userId) {
     try {
-        const response = await fetch(`http://127.0.0.1:8000/doctor/${userId}/profile`);
+        const response = await fetch(`${window.API_BASE_URL}/doctor/${userId}/profile`);
         const data = await response.json();
 
         if (data.success && data.profile) {
