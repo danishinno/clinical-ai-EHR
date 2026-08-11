@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadPendingDoctors() {
     try {
-        const response = await fetch('${window.API_BASE_URL}/admin/pending');
+        const response = await fetch(`${window.API_BASE_URL}/admin/pending`);
         const data = await response.json();
 
         const list = document.getElementById('pending-list');
@@ -197,7 +197,7 @@ async function loadPendingDoctors() {
 
 async function approveDoctor(id) {
     try {
-        await fetch('${window.API_BASE_URL}/admin/approve', {
+        await fetch(`${window.API_BASE_URL}/admin/approve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ doctor_id: id })
@@ -211,7 +211,7 @@ async function approveDoctor(id) {
 
 async function loadOverview() {
     try {
-        const response = await fetch('${window.API_BASE_URL}/admin/overview');
+        const response = await fetch(`${window.API_BASE_URL}/admin/overview`);
         const data = await response.json();
 
         const container = document.getElementById('overview-list');
@@ -328,7 +328,7 @@ async function handleGuidelineUpload(e) {
         uploadBtn.textContent = 'Uploading & Parsing...';
         statusDiv.textContent = '';
 
-        const response = await fetch('${window.API_BASE_URL}/admin/upload-guideline', {
+        const response = await fetch(`${window.API_BASE_URL}/admin/upload-guideline`, {
             method: 'POST',
             body: formData
         });
@@ -356,7 +356,7 @@ async function handleGuidelineUpload(e) {
 // STATIC REGISTRATION AND QUEUING MODULES
 async function loadQueueDoctors() {
     try {
-        const response = await fetch('${window.API_BASE_URL}/admin/doctors');
+        const response = await fetch(`${window.API_BASE_URL}/admin/doctors`);
         const data = await response.json();
         
         const select = document.getElementById('reg-doctor-select');
@@ -398,7 +398,7 @@ function renderPatientsDropdown(searchTerm = '') {
 
 async function loadPatientsList() {
     try {
-        const response = await fetch('${window.API_BASE_URL}/admin/patients-list');
+        const response = await fetch(`${window.API_BASE_URL}/admin/patients-list`);
         const data = await response.json();
         
         window.allPatientsList = data.patients || [];
@@ -414,7 +414,7 @@ async function loadActiveQueue() {
         if (!window.doctorsList) {
             await loadQueueDoctors();
         }
-        const response = await fetch('${window.API_BASE_URL}/admin/active-queue');
+        const response = await fetch(`${window.API_BASE_URL}/admin/active-queue`);
         const data = await response.json();
         
         const container = document.getElementById('live-queue-container');
@@ -469,7 +469,7 @@ async function loadActiveQueue() {
 
 window.reassignPatient = async function(patientId, doctorId) {
     try {
-        const response = await fetch('${window.API_BASE_URL}/admin/reassign-patient', {
+        const response = await fetch(`${window.API_BASE_URL}/admin/reassign-patient`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ patient_id: patientId, doctor_id: parseInt(doctorId) })
@@ -547,7 +547,7 @@ async function handlePatientQueuing(e) {
         submitBtn.textContent = 'Queuing Patient...';
         statusDiv.textContent = '';
         
-        const response = await fetch('${window.API_BASE_URL}/admin/register-patient', {
+        const response = await fetch(`${window.API_BASE_URL}/admin/register-patient`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -588,7 +588,7 @@ async function loadGuidelines() {
     if (!listContainer) return;
     
     try {
-        const response = await fetch('${window.API_BASE_URL}/admin/guidelines');
+        const response = await fetch(`${window.API_BASE_URL}/admin/guidelines`);
         const data = await response.json();
         
         if (data.success && data.guidelines) {
@@ -906,7 +906,7 @@ window.loadMcRecords = async function() {
     container.innerHTML = '<p class="placeholder-text">Loading…</p>';
 
     try {
-        const res = await fetch('${window.API_BASE_URL}/admin/medical-certificates');
+        const res = await fetch(`${window.API_BASE_URL}/admin/medical-certificates`);
         const data = await res.json();
         const certs = data.certificates || [];
 
