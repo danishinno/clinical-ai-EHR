@@ -1113,11 +1113,6 @@ function loadPatient(patient) {
         document.getElementById('banner-age').textContent = patient.age;
         document.getElementById('banner-gender').textContent = patient.gender;
         document.getElementById('banner-ic').textContent = patient.ic_number || 'N/A';
-        
-        // Safety alerts defaults (editable by clinician in contenteditable spans)
-        document.getElementById('banner-allergies').textContent = "Allergies: None";
-        document.getElementById('banner-vitals').textContent = "BP: 120/80 | HR: 72";
-        
         demoBanner.classList.remove('hidden');
     }
 
