@@ -222,6 +222,35 @@ def run_tests():
             assert res_addendum.json().get("success") is True, "Appending addendum should succeed"
             print("✅ Backend addendum saving verified successfully.")
 
+            # Test Case F: Hybrid DB Sync & Oncology Protocol Integration
+            print("\nTesting Hybrid DB Cache & Protocol Ingestion...")
+            from database import sync_patient_cache, query_db
+            sync_patient_cache({
+                "id": 8888,
+                "doctor_id": doc_id,
+                "patient_name": "Test Hybrid Patient",
+                "age": 45,
+                "gender": "Female",
+                "queue_status": "on_hold",
+                "ic_number": "888888888888"
+            })
+            cached_patient = query_db("SELECT * FROM patients_cache WHERE id = 8888", one=True)
+            assert cached_patient is not None, "Hybrid patient cache sync failed"
+            assert cached_patient["patient_name"] == "Test Hybrid Patient"
+            print("✅ Hybrid DB offline cache sync verified successfully.")
+
+            # Test Case G: Clinical Brain Protocol Query (FOLFOX / Chemotherapy)
+            print("\nTesting Clinical Brain Protocol Retrieval (Oncology Chemotherapy)...")
+            res_brain = requests.post(f"{BASE_URL}/ask-guidelines", json={
+                "user_question": "What is the antiemetic protocol for FOLFOX chemotherapy in colorectal cancer?",
+                "transcript": "",
+                "doctor_id": doc_id,
+                "patient_id": patient_id
+            })
+            assert res_brain.status_code == 200
+            assert "answer" in res_brain.json()
+            print("✅ Clinical Brain protocol query answered successfully.")
+
         except Exception as err:
             print("⚠️ SOAP Notes Locking & Addendum test failed:", err)
             
@@ -230,6 +259,7 @@ def run_tests():
         print("\nCleaning up test records from database...")
         cursor.execute("DELETE FROM encounters WHERE id IN (?, ?, ?)", (encounter_past_id, encounter_old_id, encounter_recent_id))
         cursor.execute("DELETE FROM patients WHERE id = ?", (patient_id,))
+        cursor.execute("DELETE FROM patients_cache WHERE id = 8888")
         cursor.execute("DELETE FROM users WHERE id = ?", (doc_id,))
         conn.commit()
         conn.close()

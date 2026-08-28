@@ -77,6 +77,19 @@ def init_db():
             FOREIGN KEY(encounter_id) REFERENCES encounters(id),
             FOREIGN KEY(doctor_id) REFERENCES users(id)
         )''')
+
+    # 6. Create Patients Cache table (Offline sync fallback for Hybrid Cloud Architecture)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS patients_cache (
+            id INTEGER PRIMARY KEY,
+            doctor_id INTEGER,
+            patient_name TEXT,
+            age INTEGER,
+            gender TEXT,
+            queue_status TEXT,
+            ic_number TEXT UNIQUE,
+            synced_at TEXT
+        )''')
     
     
     # Run structural database column migrations
@@ -225,3 +238,52 @@ def query_db(query, args=(), one=False, commit=False):
     if commit:
         return rv
     return (rv[0] if rv else None) if one else rv
+
+# HYBRID DATABASE ARCHITECTURE HELPERS
+def query_cloud_db(query, args=(), one=False, commit=False):
+    """
+    Cloud DB abstraction query wrapper.
+    In cloud/hybrid deployment, queries user credentials and master patient identity.
+    Falls back to local SQLite tables if cloud endpoint is unconfigured or offline.
+    """
+    import os
+    cloud_url = os.getenv("CLOUD_DATABASE_URL")
+    if cloud_url:
+        try:
+            # Placeholder for Cloud DB connection driver (e.g. Supabase / Postgres / Turso)
+            pass
+        except Exception as cloud_err:
+            print(f"⚠️ [Hybrid DB] Cloud DB error, falling back to local storage: {cloud_err}")
+    
+    return query_db(query, args, one=one, commit=commit)
+
+def query_local_db(query, args=(), one=False, commit=False):
+    """
+    Local DB query wrapper for privacy-sensitive clinical encounters, RAG guidelines, and MC audit logs.
+    Guarantees consultation data never leaves the local Apple Silicon hardware.
+    """
+    return query_db(query, args, one=one, commit=commit)
+
+def sync_patient_cache(patient_dict):
+    """
+    Syncs cloud master patient identity profile into local SQLite cache table for offline resilience.
+    """
+    if not patient_dict or "id" not in patient_dict:
+        return
+    try:
+        from datetime import datetime
+        query_db("""
+            INSERT OR REPLACE INTO patients_cache (id, doctor_id, patient_name, age, gender, queue_status, ic_number, synced_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            patient_dict.get("id"),
+            patient_dict.get("doctor_id"),
+            patient_dict.get("patient_name"),
+            patient_dict.get("age"),
+            patient_dict.get("gender"),
+            patient_dict.get("queue_status"),
+            patient_dict.get("ic_number"),
+            datetime.now().isoformat()
+        ), commit=True)
+    except Exception as e:
+        print(f"⚠️ [Hybrid DB] Error syncing patient cache: {e}")

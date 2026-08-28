@@ -1,9 +1,15 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 chromadb
 bcrypt
 python-multipart
+python-dotenv
 requests
 numpy
 openai
+pypdf
+
+# Optional — Apple Silicon local AI (install manually if needed)
+# mlx-whisper
+# ollama

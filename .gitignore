@@ -11,6 +11,9 @@ __pycache__/
 
 # Databases & local stores
 chroma_db/
+medical_knowledge/
+*.db
+.env
 
 # System / OS files
 .DS_Store

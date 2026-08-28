@@ -1,7 +1,9 @@
+import multiprocessing
 import os
 from dotenv import load_dotenv
 load_dotenv()
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -61,6 +63,12 @@ class TerminalLogRedirector:
     def flush(self):
         self.original.flush()
 
+    def isatty(self):
+        return getattr(self.original, "isatty", lambda: False)()
+
+    def __getattr__(self, attr):
+        return getattr(self.original, attr)
+
 async def broadcast_log(msg: str):
     for ws in list(log_websockets):
         try:
@@ -73,13 +81,22 @@ sys.stderr = TerminalLogRedirector(sys.stderr)
 
 chroma_client = chromadb.PersistentClient(path="./medical_knowledge")
 collection = chroma_client.get_or_create_collection(name="clinical_docs")
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global main_loop
+    main_loop = asyncio.get_running_loop()
+    print("🚀 Live backend log monitor engine started and streaming...")
+    ingest_specialized_protocols()
+    yield
 
-def call_llm_api(messages, preferred_model="llama3", json_format=False):
+app = FastAPI(lifespan=lifespan)
+
+def call_llm_api(messages, preferred_model="llama3", json_format=False) -> str:
     # 1. Check Cloud API Key (for Render Cloud deployment)
     groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
     if groq_api_key:
         try:
+            # pyrefly: ignore [missing-import]
             from openai import OpenAI
             base_url = "https://api.groq.com/openai/v1" if os.getenv("GROQ_API_KEY") else None
             client = OpenAI(api_key=groq_api_key, base_url=base_url)
@@ -88,7 +105,8 @@ def call_llm_api(messages, preferred_model="llama3", json_format=False):
             if json_format:
                 kwargs["response_format"] = {"type": "json_object"}
             res = client.chat.completions.create(**kwargs)
-            return res.choices[0].message.content
+            if res.choices and res.choices[0].message.content:
+                return res.choices[0].message.content
         except Exception as cloud_err:
             print(f" [Clinical Brain] Cloud API Error: {cloud_err}")
 
@@ -145,11 +163,47 @@ def call_llm_api(messages, preferred_model="llama3", json_format=False):
     )
 
 
-@app.on_event("startup")
-async def startup_event():
-    global main_loop
-    main_loop = asyncio.get_running_loop()
-    print("🚀 Live backend log monitor engine started and streaming...")
+def ingest_specialized_protocols():
+    protocols_dir = "./medical_knowledge/protocols"
+    if not os.path.exists(protocols_dir):
+        return
+    for fname in os.listdir(protocols_dir):
+        if fname.endswith(".json"):
+            filepath = os.path.join(protocols_dir, fname)
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    protocols_data = json.load(f)
+                new_count = 0
+                skip_count = 0
+                for item in protocols_data:
+                    doc_id = f"protocol_{uuid.uuid5(uuid.NAMESPACE_DNS, json.dumps(item))}"
+                    doc_str = json.dumps(item, indent=2)
+                    # Deduplication: skip if already in ChromaDB (avoids silent exception on every restart)
+                    try:
+                        existing = collection.get(ids=[doc_id])
+                        if existing and existing.get("ids"):
+                            skip_count += 1
+                            continue
+                    except Exception:
+                        pass
+                    try:
+                        collection.add(
+                            documents=[doc_str],
+                            metadatas=[{"type": "specialized_protocol", "filename": fname, "condition": item.get("condition", "General Protocol")}],
+                            ids=[doc_id]
+                        )
+                        new_count += 1
+                    except Exception:
+                        pass
+                if new_count > 0:
+                    print(f"✅ Ingested {new_count} new protocol(s) from: {fname} ({skip_count} already indexed, skipped)")
+                else:
+                    print(f"ℹ️  Protocol file already fully indexed: {fname} ({skip_count} entries)")
+            except Exception as e:
+                print(f"⚠️ Protocol ingestion note for {fname}: {e}")
+
+
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -181,6 +235,7 @@ class ClinicalQuery(BaseModel):
     transcript: str
     ic_number: Optional[str] = None
     patient_id: Optional[int] = None
+    language: Optional[str] = "en"
 
 class PatientRegisterQuery(BaseModel):
     patient_name: str
@@ -262,24 +317,41 @@ class SaveCertificateQuery(BaseModel):
 @app.websocket("/live-transcribe")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("Frontend connected: Live dictation started.")
+    lang = websocket.query_params.get("lang", "en")
+    print(f"Frontend connected: Live dictation started (Language mode: {lang}).")
     audio_buffer = np.array([], dtype=np.float32)
 
     def run_transcribe(buffer_data):
+        if not HAS_MLX_WHISPER or mlx_whisper is None:
+            print("⚠️ [Live Transcribe] mlx_whisper is not loaded/installed in the current environment.")
+            return {"text": "", "segments": []}
+
         # 1. Volume Noise Gate (RMS Energy threshold)
         rms = np.sqrt(np.mean(buffer_data**2))
         print(f" Audio Chunk RMS Energy: {rms:.6f}")
         if rms < 0.003:
             return {"text": "", "segments": []}
 
-        result = mlx_whisper.transcribe(
-            buffer_data,
-            path_or_hf_repo="mlx-community/whisper-small-mlx-8bit",
-            temperature=0.0,
-            language="en",
-            initial_prompt="A clinical medical consultation in English. Patient: I have chest pain. Doctor: How long have you had this chest pain? Keywords: stable angina, chest discomfort, tightness, squeezing, physical exertion, shortness of breath, high cholesterol, heart attack."
+        transcribe_lang = "ms" if lang == "ms" else "en"
+        initial_prompt = (
+            "Perbualan klinikal doktor dan pesakit dalam Bahasa Melayu atau Bahasa Inggeris. "
+            "Pesakit: Saya rasa sakit dada, pening kepala, demam, kencing manis, darah tinggi. Ubat..."
+            if lang == "ms" else
+            "A clinical medical consultation in English. Patient: I have chest pain. Doctor: How long have you had this chest pain? Keywords: stable angina, chest discomfort, tightness, squeezing, physical exertion, shortness of breath, high cholesterol, heart attack."
         )
-        return result
+
+        try:
+            result = mlx_whisper.transcribe(
+                buffer_data,
+                path_or_hf_repo="mlx-community/whisper-small-mlx-8bit",
+                temperature=0.0,
+                language=transcribe_lang,
+                initial_prompt=initial_prompt
+            )
+            return result
+        except Exception as e:
+            print(f" [Live Transcribe] Transcription error: {e}")
+            return {"text": "", "segments": []}
 
     try:
         while True:
@@ -296,15 +368,30 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 
                 # 2. No-Speech Probability Segment Filtering
-                segments = result.get("segments", [])
                 valid_texts = []
-                for seg in segments:
-                    no_speech_prob = seg.get("no_speech_prob", 0.0)
-                    # Ignore segments with high no-speech probability to prevent silent hallucinations
-                    if no_speech_prob < 0.65:
-                        valid_texts.append(seg.get("text", "").strip())
+                if isinstance(result, dict):
+                    segments = result.get("segments", [])
+                    if isinstance(segments, list):
+                        for seg in segments:
+                            if isinstance(seg, dict):
+                                no_speech_prob = seg.get("no_speech_prob", 0.0)
+                                # Ignore segments with high no-speech probability to prevent silent hallucinations
+                                if no_speech_prob < 0.65:
+                                    text = seg.get("text", "")
+                                    if text:
+                                        valid_texts.append(text.strip())
+                            elif isinstance(seg, str):
+                                valid_texts.append(seg.strip())
+                    elif isinstance(segments, str):
+                        valid_texts.append(segments.strip())
+
+                    # Fallback to result["text"] if valid_texts is empty but text exists
+                    if not valid_texts and result.get("text"):
+                        valid_texts.append(str(result["text"]).strip())
+                elif isinstance(result, str):
+                    valid_texts.append(result.strip())
                 
-                transcript_chunk = " ".join(valid_texts).strip()
+                transcript_chunk = " ".join(filter(None, valid_texts)).strip()
 
                 if transcript_chunk:
                     print(f"🗣️ Live Heard: {transcript_chunk}")
@@ -321,7 +408,7 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/process-dictation")
 async def process_dictation(query: ClinicalQuery):
     print(f"\n -------------------------------------------------------------")
-    print(f" [Dictation Scribe] Processing transcript for Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
+    print(f" [Dictation Scribe] Processing transcript (Lang: {query.language}) for Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
     print(f" -------------------------------------------------------------")
     
     # Check if a pre-assigned patient is active
@@ -334,16 +421,21 @@ async def process_dictation(query: ClinicalQuery):
     Extract the patient details and output ONLY a valid JSON object in the SOAP format.
     If a detail is not mentioned in the transcript, set its value to null.
 
+    CRITICAL INSTRUCTION FOR MULTI-LANGUAGE CONSULTATION:
+    The input transcript may be spoken in Bahasa Melayu, English, or a mix of both (Manglish).
+    You MUST translate all symptoms, patient complaints, clinical examinations, diagnoses, and treatment plans into standard English medical terminology.
+    The output JSON SOAP note MUST BE WRITTEN ENTIRELY IN ENGLISH.
+
     CRITICAL: You are a STRICT data extraction scribe. NEVER invent or infer a diagnosis.
     Use exactly these keys:
     {
         "name": "Patient's name",
         "age": "Patient's age as an integer",
         "ic_number": "IC or identity passport number if spoken, otherwise null",
-        "subjective": "Patient's condition in their own words, complaint, and history",
-        "objective": "Objective observations, vital signs, physical exam findings",
-        "assessment": "Medical diagnosis or clinician's assessment",
-        "plan": "Treatment plan, medications, follow-up instructions"
+        "subjective": "Patient's condition in their own words, complaint, and history (in English)",
+        "objective": "Objective observations, vital signs, physical exam findings (in English)",
+        "assessment": "Medical diagnosis or clinician's assessment (in English)",
+        "plan": "Treatment plan, medications, follow-up instructions (in English)"
     }
     """
 
@@ -761,12 +853,17 @@ async def ask_guidelines(query: GuidelineQuery):
 
     guideline_docs = []
     try:
-        print(" [Clinical Brain] Querying ChromaDB guidelines Vector Store...")
-        results = collection.query(query_texts=[question_text], n_results=5)
-        if results['documents']:
-            for doc, meta in zip(results['documents'][0], results['metadatas'][0]):
-                if meta and meta.get("type") == "guideline":
-                    guideline_docs.append(f"Source: {meta.get('filename')}\n{doc}")
+        print(" [Clinical Brain] Querying ChromaDB guidelines & protocols Vector Store...")
+        results = collection.query(query_texts=[question_text], n_results=6)
+        docs = (results.get('documents') or [[]])[0] if results else []
+        metas = (results.get('metadatas') or [[]])[0] if results else []
+        if docs:
+            if not metas or len(metas) < len(docs):
+                metas = (metas or []) + [{}] * (len(docs) - len(metas or []))
+            for doc, meta in zip(docs, metas):
+                if meta and meta.get("type") in ["guideline", "specialized_protocol"]:
+                    source_label = meta.get("filename") or meta.get("condition") or "Medical Practice Guideline"
+                    guideline_docs.append(f"Source Protocol/Guideline ({source_label}):\n{doc}")
     except Exception as ce:
         print(f" [Clinical Brain] Chroma Query Error: {ce}")
 
@@ -994,14 +1091,23 @@ async def get_doctor_patients(doctor_id: str):
 @app.post("/admin/upload-guideline")
 async def upload_guideline(file: UploadFile = File(...)):
     try:
+        if not file or not file.filename:
+            return {"success": False, "message": "No file uploaded or invalid filename."}
+
         content_text = ""
-        if file.filename.endswith(".pdf"):
+        if file.filename.lower().endswith(".pdf"):
             import pypdf, io
             pdf_bytes = await file.read()
             reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
-            for page in reader.pages: content_text += page.extract_text() + "\n"
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    content_text += text + "\n"
         else:
-            return {"success": False, "message": "Format unsupported."}
+            return {"success": False, "message": "Format unsupported. Only PDF files are supported."}
+
+        if not content_text.strip():
+            return {"success": False, "message": "File is empty or no readable text could be extracted."}
 
         chunks = [content_text[i:i+1000] for i in range(0, len(content_text), 1000)]
         for i, chunk in enumerate(chunks):
@@ -1369,3 +1475,7 @@ async def backend_logs_endpoint(websocket: WebSocket):
     finally:
         if websocket in log_websockets:
             log_websockets.remove(websocket)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

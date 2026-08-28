@@ -36,6 +36,11 @@ const transcriptContent = document.getElementById('transcript-content');
 const loadingState = document.getElementById('loading-state');
 const dataGrid = document.getElementById('extracted-data');
 
+// Always default language to English on page load (resets each session)
+const langSelectEl = document.getElementById('language-select');
+if (langSelectEl) langSelectEl.value = 'en';
+
+
 const valName = document.getElementById('val-name');
 const valAge = document.getElementById('val-age');
 const valGender = document.getElementById('val-gender');
@@ -67,6 +72,9 @@ let speechRecognition = null;
 startBtn.addEventListener('click', async () => {
     if (isRecording) return;
 
+    const langSelect = document.getElementById('language-select');
+    const selectedLang = langSelect ? langSelect.value : 'en';
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (SpeechRecognition) {
@@ -74,7 +82,7 @@ startBtn.addEventListener('click', async () => {
             speechRecognition = new SpeechRecognition();
             speechRecognition.continuous = true;
             speechRecognition.interimResults = true;
-            speechRecognition.lang = 'en-US';
+            speechRecognition.lang = selectedLang === 'ms' ? 'ms-MY' : 'en-US';
 
             speechRecognition.onstart = () => {
                 isRecording = true;
@@ -113,7 +121,7 @@ startBtn.addEventListener('click', async () => {
         const stream = await getGlobalStream();
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? '127.0.0.1:8000' : window.location.host;
-        socket = new WebSocket(`${wsProtocol}//${wsHost}/live-transcribe`);
+        socket = new WebSocket(`${wsProtocol}//${wsHost}/live-transcribe?lang=${selectedLang}`);
 
         socket.onopen = () => {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -176,11 +184,14 @@ finishBtn.addEventListener('click', async () => {
     dataGrid.classList.add('hidden');
     loadingState.classList.remove('hidden');
 
+    const langSelect = document.getElementById('language-select');
+    const selectedLang = langSelect ? langSelect.value : 'en';
+
     try {
         const response = await fetch(`${window.API_BASE_URL}/process-dictation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ doctor_id: userId, transcript: fullTranscript, patient_id: currentPatientId })
+            body: JSON.stringify({ doctor_id: userId, transcript: fullTranscript, patient_id: currentPatientId, language: selectedLang })
         });
 
         const data = await response.json();

@@ -1,10 +1,21 @@
-// storage.js - Robust storage helper wrapper with window.name fallback for file:// sandboxing
+// storage.js - Robust session-based storage helper wrapper with window.name fallback for sandboxing
 (function() {
+    // One-time cleanup of any legacy permanent localStorage tokens from previous versions
+    try {
+        if (typeof localStorage !== 'undefined') {
+            ['user_id', 'username', 'first_name', 'last_name', 'role'].forEach(function(k) {
+                localStorage.removeItem(k);
+            });
+        }
+    } catch (e) {
+        // Ignore cross-origin / sandboxing restrictions
+    }
+
     window.AppStorage = {
         getItem: function(key) {
             try {
-                // If localStorage is accessible, use it
-                return localStorage.getItem(key);
+                // If sessionStorage is accessible, use it
+                return sessionStorage.getItem(key);
             } catch (e) {
                 // Fallback to reading from window.name JSON string
                 try {
@@ -17,7 +28,7 @@
         },
         setItem: function(key, value) {
             try {
-                localStorage.setItem(key, value);
+                sessionStorage.setItem(key, value);
             } catch (e) {
                 try {
                     const session = JSON.parse(window.name || '{}');
@@ -30,7 +41,7 @@
         },
         removeItem: function(key) {
             try {
-                localStorage.removeItem(key);
+                sessionStorage.removeItem(key);
             } catch (e) {
                 try {
                     const session = JSON.parse(window.name || '{}');
@@ -43,7 +54,10 @@
         },
         clear: function() {
             try {
-                localStorage.clear();
+                sessionStorage.clear();
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.clear();
+                }
             } catch (e) {
                 window.name = '{}';
             }
