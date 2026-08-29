@@ -34,10 +34,14 @@
                     style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: transparent;">
                 <div>
                     <h1 style="margin-bottom: 0;">Health Sync</h1>
-                    <p class="subtext" style="margin-top: 0;">Welcome, Dr. <span id="dr-name-display"></span></p>
+                    <p class="subtext" style="margin-top: 0;"><span id="txt-welcome">Welcome</span>, Dr. <span id="dr-name-display"></span></p>
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; position: relative;">
+                <select id="language-select" class="language-select" title="System Language">
+                    <option value="en">🌐 English</option>
+                    <option value="ms">🇲🇾 Bahasa Melayu</option>
+                </select>
                 <button id="toggle-sidebar-btn" class="btn-toggle-sidebar" type="button">Queue Sidebar</button>
                 <div style="position: relative; display: inline-block;">
                     <button id="menu-dots-btn" class="btn btn-secondary"
@@ -46,13 +50,13 @@
                     <div id="header-dropdown" class="dropdown-content hidden"
                         style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 260px; box-shadow: var(--shadow); border-radius: var(--radius-lg); border: 1px solid var(--border-color); z-index: 10;">
 
-                        <button onclick="window.location.href='profile.html'" class="dropdown-item"
+                        <button id="menu-profile-btn" onclick="window.location.href='profile.html'" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Profile Settings</button>
                         <button id="history-btn" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Patient History</button>
                         <button id="report-btn" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Monthly Report</button>
-                        <button onclick="window.open('manual.html', '_blank')" class="dropdown-item"
+                        <button id="manual-btn" onclick="window.open('manual.html', '_blank')" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Help & Manual</button>
                         <button id="logout-btn" class="dropdown-item" style="color: var(--danger-color);">
                             Logout</button>
@@ -64,10 +68,10 @@
         <!-- Patient Demographics & Safety Banner -->
         <div id="demographics-banner" class="demographics-banner hidden" style="margin-bottom: 1.5rem;">
             <div class="demographics-patient-info">
-                <div class="demographics-item">Patient: <strong id="banner-name">--</strong></div>
-                <div class="demographics-item">Age: <strong id="banner-age">--</strong></div>
-                <div class="demographics-item">Gender: <strong id="banner-gender">--</strong></div>
-                <div class="demographics-item">ID: <strong id="banner-ic">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-patient">Patient</span>: <strong id="banner-name">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-age">Age</span>: <strong id="banner-age">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-gender">Gender</span>: <strong id="banner-gender">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-id">ID</span>: <strong id="banner-ic">--</strong></div>
             </div>
         </div>
 
@@ -75,14 +79,14 @@
             <!-- Collapsible Queue Sidebar -->
             <aside id="queue-sidebar" class="queue-sidebar panel">
                 <div class="panel-header">
-                    <h2>Patient Queue</h2>
+                    <h2 id="txt-queue-title">Patient Queue</h2>
                 </div>
                 <div style="padding: 1.2rem; overflow-y: auto; flex-grow: 1;">
-                    <p style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">
+                    <p id="txt-patients-on-hold" style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">
                         Patients on Hold</p>
                     <div id="sidebar-queue-list">
                         <!-- Loaded dynamically -->
-                        <p class="placeholder-text">No patients in queue.</p>
+                        <p id="txt-no-patients-queue" class="placeholder-text">No patients in queue.</p>
                     </div>
                 </div>
             </aside>
@@ -92,12 +96,8 @@
                 <main class="workspace-layout">
                     <section class="panel live-dictation">
                         <div class="panel-header">
-                            <h2>Live Dictation</h2>
+                            <h2 id="txt-live-dictation">Live Dictation</h2>
                             <div class="controls" style="display: flex; align-items: center; gap: 0.6rem;">
-                                <select id="language-select" class="language-select" title="Consultation Language">
-                                    <option value="en">🌐 English</option>
-                                    <option value="ms">🇲🇾 Bahasa Melayu</option>
-                                </select>
                                 <button id="start-btn" class="btn btn-primary">
                                     Start
                                 </button>
@@ -107,53 +107,52 @@
                             </div>
                         </div>
                         <div class="transcript-area">
-                            <p id="transcript-placeholder" class="placeholder-text">Click "Start Live Dictation" and
-                                begin speaking...</p>
+                            <p id="transcript-placeholder" class="placeholder-text">Click "Start" and begin speaking...</p>
                             <div id="transcript-content"></div>
                         </div>
                     </section>
 
                     <section class="panel structured-notes">
                         <div class="panel-header">
-                            <h2>Structured Clinical Notes</h2>
+                            <h2 id="txt-structured-notes">Structured Clinical Notes</h2>
                         </div>
                         <div class="notes-content-wrapper">
                             <div class="notes-content" id="notes-content">
                                 <div id="loading-state" class="hidden">
-                                    <div class="spinner"></div> Extracting data...
+                                    <div class="spinner"></div> <span id="txt-extracting-data">Extracting data...</span>
                                 </div>
 
                                 <div id="extracted-data" class="data-grid">
                                     <div class="data-field">
-                                        <label>Name</label>
+                                        <label id="lbl-val-name">Name</label>
                                         <div class="value editable-field" id="val-name" contenteditable="false">--</div>
                                     </div>
                                     <div class="data-field">
-                                        <label>Age</label>
+                                        <label id="lbl-val-age">Age</label>
                                         <div class="value editable-field" id="val-age" contenteditable="false">--</div>
                                     </div>
                                     <div class="data-field">
-                                        <label>Gender</label>
+                                        <label id="lbl-val-gender">Gender</label>
                                         <div class="value editable-field" id="val-gender" contenteditable="false">--
                                         </div>
                                     </div>
                                     <div class="data-field">
-                                        <label>Subjective (S)</label>
+                                        <label id="lbl-val-subjective">Subjective (S)</label>
                                         <div class="value editable-field" id="val-subjective" contenteditable="true">--
                                         </div>
                                     </div>
                                     <div class="data-field">
-                                        <label>Objective (O)</label>
+                                        <label id="lbl-val-objective">Objective (O)</label>
                                         <div class="value editable-field" id="val-objective" contenteditable="true">--
                                         </div>
                                     </div>
                                     <div class="data-field">
-                                        <label>Assessment (A)</label>
+                                        <label id="lbl-val-assessment">Assessment (A)</label>
                                         <div class="value editable-field" id="val-assessment" contenteditable="true">--
                                         </div>
                                     </div>
                                     <div class="data-field">
-                                        <label>Plan (P)</label>
+                                        <label id="lbl-val-plan">Plan (P)</label>
                                         <div class="value editable-field" id="val-plan" contenteditable="true">--</div>
                                     </div>
                                 </div>
@@ -161,7 +160,7 @@
                                 <!-- Interactive Prescriptions Builder -->
                                 <div class="prescription-container">
                                     <div class="prescription-header">
-                                        <h3>Prescriptions & Medications</h3>
+                                        <h3 id="txt-prescriptions-title">Prescriptions & Medications</h3>
                                         <button id="add-prescription-btn" class="btn btn-secondary"
                                             style="font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 20px;"
                                             type="button">
@@ -169,10 +168,10 @@
                                         </button>
                                     </div>
                                     <div class="prescription-list-header">
-                                        <div>Drug Name</div>
-                                        <div>Dosage</div>
-                                        <div>Frequency</div>
-                                        <div>Duration</div>
+                                        <div id="col-drug">Drug Name</div>
+                                        <div id="col-dose">Dosage</div>
+                                        <div id="col-freq">Frequency</div>
+                                        <div id="col-dur">Duration</div>
                                         <div></div>
                                     </div>
                                     <div id="prescription-list" class="prescription-list">
@@ -183,8 +182,7 @@
                                 <!-- AI Refiner Section -->
                                 <div class="refiner-container"
                                     style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.8rem;">
-                                    <h3 style="margin: 0; font-size: 1rem; color: #ffffff;">Add Manual Corrections /
-                                        Additions</h3>
+                                    <h3 id="txt-refiner-title" style="margin: 0; font-size: 1rem; color: #ffffff;">Add Manual Corrections / Additions</h3>
                                     <textarea id="manual-additions-input"
                                         placeholder="Type any additional clinical details or corrections here... (e.g. 'Patient actually has BP 130/85 and add paracetamol for fever')"
                                         style="min-height: 80px; width: 100%; resize: vertical; padding: 0.8rem; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.05); color: var(--text-main); font-family: inherit; font-size: 0.95rem; border: 1px solid var(--border-color);"></textarea>
@@ -198,7 +196,7 @@
 
                                 <div style="margin-top: 1.5rem; text-align: right;">
                                     <button id="save-notes-btn" class="btn btn-primary">
-                                        <span class="icon"></span> Save Consultation
+                                        <span class="icon"></span> <span id="txt-save-consultation">Save Consultation</span>
                                     </button>
                                 </div>
                             </div>
@@ -216,7 +214,7 @@
         <div id="cds-panel" class="cds-panel panel glass-panel hidden">
             <div class="panel-header">
                 <div style="display: flex; align-items: center; gap: 1rem;">
-                    <h2> Clinical Brain (CDS)</h2>
+                    <h2 id="cds-header-title"> Clinical Brain (CDS)</h2>
                 </div>
                 <button id="close-cds-btn" class="btn btn-secondary"
                     style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;"
@@ -224,9 +222,9 @@
             </div>
 
             <div class="smart-suggestions">
-                <button class="smart-btn" data-query="Verify Guidelines">Verify Guidelines</button>
-                <button class="smart-btn" data-query="Summarize History">Summarize History</button>
-                <button class="smart-btn" data-query="Recommend Treatment">Recommend Treatment</button>
+                <button class="smart-btn" id="cds-btn-guidelines" data-query="Verify Guidelines">Verify Guidelines</button>
+                <button class="smart-btn" id="cds-btn-history" data-query="Summarize History">Summarize History</button>
+                <button class="smart-btn" id="cds-btn-treatment" data-query="Recommend Treatment">Recommend Treatment</button>
             </div>
 
             <div class="chat-area" id="chat-area">

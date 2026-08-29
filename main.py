@@ -294,6 +294,7 @@ class GuidelineQuery(BaseModel):
     doctor_id: Optional[int] = None
     patient_id: Optional[int] = None
     history: List[dict] = []
+    language: Optional[str] = "en"
 
 class CertificateQuery(BaseModel):
     encounter_id: int
@@ -795,8 +796,14 @@ async def ask_guidelines(query: GuidelineQuery):
 
     if intent == "ADMIN":
     # -----------------------------------------------------------------
-        gemma_system_prompt = """You are an admin assistant. Answer the question using ONLY the provided PATIENTS list context.
-        Note: Patients marked with '[ACTIVE]' are active patients in the queue. Patients marked with '[PAST]' are past patients."""
+        lang_rule = (
+            "Answer in professional Bahasa Melayu using the provided PATIENTS context."
+            if getattr(query, 'language', 'en') == 'ms' else
+            "Answer in English using the provided PATIENTS context."
+        )
+        gemma_system_prompt = f"""You are an admin assistant. Answer the question using ONLY the provided PATIENTS list context.
+        Note: Patients marked with '[ACTIVE]' are active patients in the queue. Patients marked with '[PAST]' are past patients.
+        {lang_rule}"""
         gemma_user_prompt = f"PATIENTS:\n{my_patients_data}\n\nQUESTION:\n{question_text}"
         print(" [Clinical Brain] Dispatching ADMIN query to LLM...")
         content = call_llm_api([
@@ -880,9 +887,18 @@ async def ask_guidelines(query: GuidelineQuery):
     else:
         pat_info_str = "No active patient currently selected in this session."
 
-    system_prompt = """You are 'Clinical Brain', an expert medical support assistant. 
+    lang_instruction = (
+        "LANGUAGE INSTRUCTION: The clinician has set the consultation language to Bahasa Melayu. "
+        "Provide your medical explanation and advice in clear, professional Bahasa Melayu, "
+        "while keeping standard international medication and anatomical names."
+        if getattr(query, 'language', 'en') == 'ms' else
+        "LANGUAGE INSTRUCTION: Provide your clinical responses in clear, professional English medical terminology."
+    )
+
+    system_prompt = f"""You are 'Clinical Brain', an expert medical support assistant. 
     You are assisting the logged-in clinician with the active patient in the consultation room.
-    Use the CURRENT SESSION INFO to identify the doctor and patient, and synthesize your knowledge with the active patient's history, other patients' records, and official medical guidelines to answer clinical or administrative questions clearly."""
+    Use the CURRENT SESSION INFO to identify the doctor and patient, and synthesize your knowledge with the active patient's history, other patients' records, and official medical guidelines to answer clinical or administrative questions clearly.
+    {lang_instruction}"""
 
     context_block = f"""
     CURRENT SESSION INFO:
@@ -913,7 +929,7 @@ async def ask_guidelines(query: GuidelineQuery):
 
     messages.append({'role': 'user', 'content': question_text})
 
-    print(" [Clinical Brain] Dispatching CLINICAL query to LLM...")
+    print(f" [Clinical Brain] Dispatching CLINICAL query to LLM (Lang: {getattr(query, 'language', 'en')})...")
     answer_text = call_llm_api(messages, preferred_model='llama3')
     print(" [Clinical Brain] Generation complete.")
     return {"answer": answer_text.strip()}

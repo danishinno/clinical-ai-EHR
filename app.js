@@ -434,9 +434,224 @@ const closeCdsBtn = document.getElementById('close-cds-btn');
 cdsFab.addEventListener('click', () => { cdsPanel.classList.toggle('hidden'); });
 closeCdsBtn.addEventListener('click', () => { cdsHistory = []; cdsPanel.classList.add('hidden'); });
 
+const i18n = {
+    en: {
+        welcome: "Welcome",
+        toggleSidebar: "Queue Sidebar",
+        profile: " Profile Settings",
+        history: " Patient History",
+        report: " Monthly Report",
+        manual: " Help & Manual",
+        logout: " Logout",
+        bannerPatient: "Patient",
+        bannerAge: "Age",
+        bannerGender: "Gender",
+        bannerId: "ID",
+        queueTitle: "Patient Queue",
+        patientsOnHold: "Patients on Hold",
+        noPatientsQueue: "No patients in queue.",
+        liveDictation: "Live Dictation",
+        startBtn: "Start",
+        finishBtn: "Finish",
+        dictationPlaceholder: 'Click "Start" and begin speaking...',
+        structuredNotes: "Structured Clinical Notes",
+        extractingData: "Extracting data...",
+        name: "Name",
+        age: "Age",
+        gender: "Gender",
+        subjective: "Subjective (S)",
+        objective: "Objective (O)",
+        assessment: "Assessment (A)",
+        plan: "Plan (P)",
+        prescriptionsTitle: "Prescriptions & Medications",
+        addMedication: "+ Add Medication",
+        colDrug: "Drug Name",
+        colDose: "Dosage",
+        colFreq: "Frequency",
+        colDur: "Duration",
+        refinerTitle: "Add Manual Corrections / Additions",
+        refinerPlaceholder: "Type any additional clinical details or corrections here... (e.g. 'Patient actually has BP 130/85 and add paracetamol for fever')",
+        refineBtn: "Integrate Notes",
+        saveConsultation: "Save Consultation",
+        cdsTitle: " Clinical Brain (CDS)",
+        cdsGuidelinesBtn: "Verify Guidelines",
+        cdsHistoryBtn: "Summarize History",
+        cdsTreatmentBtn: "Recommend Treatment",
+        cdsPlaceholder: "<p>Ask a clinical question about the patient or use a Smart Suggestion.</p>",
+        cdsInputPlaceholder: "Ask Clinical Brain...",
+        cdsGuidelinesQuery: "Verify Guidelines",
+        cdsHistoryQuery: "Summarize History",
+        cdsTreatmentQuery: "Recommend Treatment"
+    },
+    ms: {
+        welcome: "Selamat Datang",
+        toggleSidebar: "Senarai Giliran",
+        profile: " Tetapan Profil",
+        history: " Sejarah Pesakit",
+        report: " Laporan Bulanan",
+        manual: " Bantuan & Manual",
+        logout: " Log Keluar",
+        bannerPatient: "Pesakit",
+        bannerAge: "Umur",
+        bannerGender: "Jantina",
+        bannerId: "No. K/P",
+        queueTitle: "Giliran Pesakit",
+        patientsOnHold: "Pesakit Ditangguhkan",
+        noPatientsQueue: "Tiada pesakit dalam giliran.",
+        liveDictation: "Dikte Langsung",
+        startBtn: "Mula",
+        finishBtn: "Selesai",
+        dictationPlaceholder: 'Klik "Mula" dan mula bercakap...',
+        structuredNotes: "Dokumentasi Klinikal (SOAP)",
+        extractingData: "Mengekstrak data klinikal...",
+        name: "Nama",
+        age: "Umur",
+        gender: "Jantina",
+        subjective: "Subjektif (S)",
+        objective: "Objektif (O)",
+        assessment: "Penilaian (A)",
+        plan: "Pelan Rawatan (P)",
+        prescriptionsTitle: "Preskripsi & Ubat-Ubatan",
+        addMedication: "+ Tambah Ubat",
+        colDrug: "Nama Ubat",
+        colDose: "Dos",
+        colFreq: "Kekerapan",
+        colDur: "Tempoh",
+        refinerTitle: "Pembetulan / Tambahan Manual",
+        refinerPlaceholder: "Taip maklumat klinikal tambahan atau pembetulan di sini... (cth. 'Tekanan darah pesakit 130/85, tambah paracetamol')",
+        refineBtn: "Kemas Kini Nota",
+        saveConsultation: "Simpan Sesi Konsultasi",
+        cdsTitle: " Otak Klinikal (CDS)",
+        cdsGuidelinesBtn: "Semak Garis Panduan",
+        cdsHistoryBtn: "Ringkasan Sejarah",
+        cdsTreatmentBtn: "Cadangan Rawatan",
+        cdsPlaceholder: "<p>Tanya soalan klinikal tentang pesakit atau gunakan Cadangan Pintar.</p>",
+        cdsInputPlaceholder: "Tanya Otak Klinikal...",
+        cdsGuidelinesQuery: "Sahkan garis panduan klinikal yang sesuai untuk pesakit ini",
+        cdsHistoryQuery: "Ringkaskan sejarah perubatan dan rawatan pesakit ini",
+        cdsTreatmentQuery: "Cadangkan pelan rawatan dan dos ubat berdasarkan simptom pesakit"
+    }
+};
+
+function applyLanguage(lang) {
+    const t = i18n[lang] || i18n.en;
+
+    // Header & Navigation
+    const txtWelcome = document.getElementById('txt-welcome');
+    if (txtWelcome) txtWelcome.textContent = t.welcome;
+
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
+    if (toggleSidebarBtn) toggleSidebarBtn.textContent = t.toggleSidebar;
+
+    const menuProfileBtn = document.getElementById('menu-profile-btn');
+    if (menuProfileBtn) menuProfileBtn.textContent = t.profile;
+
+    const historyBtn = document.getElementById('history-btn');
+    if (historyBtn) historyBtn.textContent = t.history;
+
+    const reportBtn = document.getElementById('report-btn');
+    if (reportBtn) reportBtn.textContent = t.report;
+
+    const manualBtn = document.getElementById('manual-btn');
+    if (manualBtn) manualBtn.textContent = t.manual;
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.textContent = t.logout;
+
+    // Patient Demographics Banner
+    const lblPatient = document.getElementById('lbl-banner-patient');
+    if (lblPatient) lblPatient.textContent = t.bannerPatient;
+    const lblAge = document.getElementById('lbl-banner-age');
+    if (lblAge) lblAge.textContent = t.bannerAge;
+    const lblGender = document.getElementById('lbl-banner-gender');
+    if (lblGender) lblGender.textContent = t.bannerGender;
+    const lblId = document.getElementById('lbl-banner-id');
+    if (lblId) lblId.textContent = t.bannerId;
+
+    // Queue Sidebar
+    const txtQueueTitle = document.getElementById('txt-queue-title');
+    if (txtQueueTitle) txtQueueTitle.textContent = t.queueTitle;
+    const txtHold = document.getElementById('txt-patients-on-hold');
+    if (txtHold) txtHold.textContent = t.patientsOnHold;
+    const txtNoQueue = document.getElementById('txt-no-patients-queue');
+    if (txtNoQueue) txtNoQueue.textContent = t.noPatientsQueue;
+
+    // Live Dictation Panel
+    const txtDictation = document.getElementById('txt-live-dictation');
+    if (txtDictation) txtDictation.textContent = t.liveDictation;
+    if (startBtn && !isRecording) startBtn.textContent = t.startBtn;
+    if (finishBtn) finishBtn.textContent = t.finishBtn;
+    const transcriptPlaceholder = document.getElementById('transcript-placeholder');
+    if (transcriptPlaceholder) transcriptPlaceholder.textContent = t.dictationPlaceholder;
+
+    // Structured Notes Panel
+    const txtNotes = document.getElementById('txt-structured-notes');
+    if (txtNotes) txtNotes.textContent = t.structuredNotes;
+    const txtExtracting = document.getElementById('txt-extracting-data');
+    if (txtExtracting) txtExtracting.textContent = t.extractingData;
+
+    const lName = document.getElementById('lbl-val-name'); if (lName) lName.textContent = t.name;
+    const lAge = document.getElementById('lbl-val-age'); if (lAge) lAge.textContent = t.age;
+    const lGender = document.getElementById('lbl-val-gender'); if (lGender) lGender.textContent = t.gender;
+    const lSub = document.getElementById('lbl-val-subjective'); if (lSub) lSub.textContent = t.subjective;
+    const lObj = document.getElementById('lbl-val-objective'); if (lObj) lObj.textContent = t.objective;
+    const lAss = document.getElementById('lbl-val-assessment'); if (lAss) lAss.textContent = t.assessment;
+    const lPlan = document.getElementById('lbl-val-plan'); if (lPlan) lPlan.textContent = t.plan;
+
+    // Prescriptions
+    const txtPresc = document.getElementById('txt-prescriptions-title'); if (txtPresc) txtPresc.textContent = t.prescriptionsTitle;
+    const addPresc = document.getElementById('add-prescription-btn'); if (addPresc) addPresc.textContent = t.addMedication;
+    const colDrug = document.getElementById('col-drug'); if (colDrug) colDrug.textContent = t.colDrug;
+    const colDose = document.getElementById('col-dose'); if (colDose) colDose.textContent = t.colDose;
+    const colFreq = document.getElementById('col-freq'); if (colFreq) colFreq.textContent = t.colFreq;
+    const colDur = document.getElementById('col-dur'); if (colDur) colDur.textContent = t.colDur;
+
+    // Refiner & Save
+    const txtRefiner = document.getElementById('txt-refiner-title'); if (txtRefiner) txtRefiner.textContent = t.refinerTitle;
+    const manualInput = document.getElementById('manual-additions-input'); if (manualInput) manualInput.placeholder = t.refinerPlaceholder;
+    const refineBtn = document.getElementById('refine-soap-btn'); if (refineBtn) refineBtn.textContent = t.refineBtn;
+    const saveBtnTxt = document.getElementById('txt-save-consultation'); if (saveBtnTxt) saveBtnTxt.textContent = t.saveConsultation;
+
+    // Clinical Brain CDS
+    const btnGuidelines = document.getElementById('cds-btn-guidelines');
+    const btnHistory = document.getElementById('cds-btn-history');
+    const btnTreatment = document.getElementById('cds-btn-treatment');
+    const chatPlaceholder = document.getElementById('chat-placeholder');
+    const chatInputEl = document.getElementById('chat-input');
+    const cdsTitle = document.getElementById('cds-header-title');
+
+    if (btnGuidelines) {
+        btnGuidelines.textContent = t.cdsGuidelinesBtn;
+        btnGuidelines.setAttribute('data-query', t.cdsGuidelinesQuery);
+    }
+    if (btnHistory) {
+        btnHistory.textContent = t.cdsHistoryBtn;
+        btnHistory.setAttribute('data-query', t.cdsHistoryQuery);
+    }
+    if (btnTreatment) {
+        btnTreatment.textContent = t.cdsTreatmentBtn;
+        btnTreatment.setAttribute('data-query', t.cdsTreatmentQuery);
+    }
+    if (chatPlaceholder) {
+        chatPlaceholder.innerHTML = t.cdsPlaceholder;
+    }
+    if (chatInputEl) {
+        chatInputEl.placeholder = t.cdsInputPlaceholder;
+    }
+    if (cdsTitle) {
+        cdsTitle.textContent = t.cdsTitle;
+    }
+}
+
+if (langSelectEl) {
+    langSelectEl.addEventListener('change', (e) => applyLanguage(e.target.value));
+    applyLanguage(langSelectEl.value || 'en');
+}
+
 async function askClinicalBrain(question) {
     if (!question.trim()) return;
 
+    const selectedLang = langSelectEl ? langSelectEl.value : 'en';
     addChatBubble(question, true);
     chatInput.value = '';
     cdsLoading.classList.remove('hidden');
@@ -450,12 +665,13 @@ async function askClinicalBrain(question) {
                 transcript: transcriptContent.innerText.trim(),
                 doctor_id: parseInt(userId),
                 patient_id: currentPatientId ? parseInt(currentPatientId) : null,
-                history: cdsHistory
+                history: cdsHistory,
+                language: selectedLang
             })
         });
 
         const data = await response.json();
-        let aiMarkdown = data.answer || 'No response.';
+        let aiMarkdown = data.answer || (selectedLang === 'ms' ? 'Tiada maklum balas.' : 'No response.');
 
         cdsHistory.push({ role: 'user', content: question });
         cdsHistory.push({ role: 'assistant', content: aiMarkdown });
@@ -464,7 +680,10 @@ async function askClinicalBrain(question) {
         addChatBubble(aiMarkdown, false, true);
 
     } catch (err) {
-        addChatBubble(' CDS server pipeline fallback connection error.', false);
+        const errMsg = selectedLang === 'ms' 
+            ? ' Ralat sambungan pelayan Otak Klinikal CDS.' 
+            : ' CDS server pipeline fallback connection error.';
+        addChatBubble(errMsg, false);
     } finally {
         cdsLoading.classList.add('hidden');
     }
