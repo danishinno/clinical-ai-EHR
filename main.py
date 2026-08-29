@@ -878,58 +878,65 @@ async def ask_guidelines(query: GuidelineQuery):
     compiled_other_history = "\n\n".join(other_patients_history_docs) if other_patients_history_docs else "No historical records for other patients."
     compiled_guidelines = "\n\n---\n\n".join(guideline_docs)
 
-    doc_info_str = "Unknown Clinician"
+    doc_info_str = "Doktor Tidak Diketahui" if getattr(query, 'language', 'en') == 'ms' else "Unknown Clinician"
     if doctor_profile:
-        doc_info_str = f"Dr. {doctor_profile['first_name']} {doctor_profile['last_name']} (Specialty: {doctor_profile['specialty']})"
+        doc_info_str = f"Dr. {doctor_profile['first_name']} {doctor_profile['last_name']} (Kepakaran/Specialty: {doctor_profile['specialty']})"
 
     if patient_profile:
-        pat_info_str = f"{patient_profile['patient_name']} (Age: {patient_profile['age']}, Gender: {patient_profile['gender']}, IC: {patient_profile['ic_number'] or 'N/A'})"
+        pat_info_str = f"{patient_profile['patient_name']} (Umur/Age: {patient_profile['age']}, Jantina/Gender: {patient_profile['gender']}, No. K/P/IC: {patient_profile['ic_number'] or 'N/A'})"
     else:
-        pat_info_str = "No active patient currently selected in this session."
+        pat_info_str = "Tiada pesakit aktif dipilih." if getattr(query, 'language', 'en') == 'ms' else "No active patient currently selected in this session."
 
-    lang_instruction = (
-        "LANGUAGE INSTRUCTION: The clinician has set the consultation language to Malaysian Malay (Bahasa Melayu piawai Malaysia). "
-        "Provide your medical explanation and advice in clear, professional Malaysian Malay as used in Malaysian clinical practice (KKM), "
-        "while keeping standard international medication and anatomical names (e.g. Paracetamol, Metformin, Amoxicillin, BP, PRN)."
-        if getattr(query, 'language', 'en') == 'ms' else
-        "LANGUAGE INSTRUCTION: Provide your clinical responses in clear, professional English medical terminology."
-    )
+    is_ms = getattr(query, 'language', 'en') == 'ms' or any(w in lower_q for w in ["cadangan", "pesakit", "ubat", "rawatan", "sejarah", "demam", "sakit", "doktor", "tolong", "apakah", "bagaimanakah", "berapa", "berikan"])
 
-    system_prompt = f"""You are 'Clinical Brain', an expert medical support assistant. 
-    You are assisting the logged-in clinician with the active patient in the consultation room.
-    Use the CURRENT SESSION INFO to identify the doctor and patient, and synthesize your knowledge with the active patient's history, other patients' records, and official medical guidelines to answer clinical or administrative questions clearly.
-    {lang_instruction}"""
+    if is_ms:
+        system_prompt = """Anda ialah 'Otak Klinikal' (Clinical Brain), sistem sokongan keputusan klinikal (CDS) kecerdasan buatan untuk doktor di klinik dan hospital Malaysia.
+ARAHAN BAHASA MUTLAK:
+1. Anda MESTI menjawab soalan ini SEPENUHNYA DALAM BAHASA MELAYU standard Malaysia (Malaysian Malay).
+2. JANGAN menjawab dalam Bahasa Inggeris (kecuali nama generik ubat antarabangsa seperti Paracetamol, Metformin, Amoxicillin, BP, PRN).
+3. Berikan jawapan yang tersusun, berhemah, berasaskan bukti klinikal, dan mudah difahami oleh pegawai perubatan.
+
+Gunakan MAKLUMAT SESI SEMASA, sejarah rawatan pesakit, dan garis panduan klinikal untuk mencadangkan diagnosis pembeza, pelan rawatan, dos ubat, atau panduan klinikal."""
+        
+        assistant_ack = "Konteks klinikal dan rekod perubatan pesakit telah dimuatkan. Sedia memberikan cadangan klinikal dalam Bahasa Melayu."
+        final_user_prompt = f"{question_text}\n\n(Arahan format: Sila berikan jawapan dan cadangan klinikal anda sepenuhnya dalam Bahasa Melayu Malaysia.)"
+    else:
+        system_prompt = """You are 'Clinical Brain', an expert clinical decision support (CDS) assistant for clinicians.
+Use the CURRENT SESSION INFO to identify the doctor and patient, and synthesize your knowledge with the active patient's history, other patients' records, and official medical guidelines to answer clinical questions clearly in professional English."""
+        
+        assistant_ack = "Context Loaded. Ready for multi-turn clinical questions."
+        final_user_prompt = question_text
 
     context_block = f"""
-    CURRENT SESSION INFO:
+    MAKLUMAT SESI / CURRENT SESSION INFO:
     - Logged-in Clinician: {doc_info_str}
     - Active Patient in Consultation: {pat_info_str}
 
-    ACTIVE PATIENT'S CLINICAL ENCOUNTERS HISTORY:
+    REKOD RAWATAN PESAKIT AKTIF / ACTIVE PATIENT'S CLINICAL ENCOUNTERS HISTORY:
     {compiled_active_history}
 
-    OTHER PATIENTS' RECENT CLINICAL ENCOUNTERS (HISTORICAL):
+    REKOD PESAKIT LAIN / OTHER PATIENTS' RECENT CLINICAL ENCOUNTERS (HISTORICAL):
     {compiled_other_history}
 
-    OFFICIAL MEDICAL GUIDELINES:
+    GARIS PANDUAN PERUBATAN / OFFICIAL MEDICAL GUIDELINES:
     {compiled_guidelines if compiled_guidelines else "No specific guidelines uploaded."}
 
-    LIVE CONSULTATION TRANSCRIPT:
+    TRANSKRIP KONSULTASI SEMASA / LIVE CONSULTATION TRANSCRIPT:
     {query.transcript if query.transcript else "No active transcript."}
     """
 
     messages = [
         {'role': 'system', 'content': system_prompt},
         {'role': 'user', 'content': context_block},
-        {'role': 'assistant', 'content': 'Context Loaded. Ready for multi-turn clinical questions.'}
+        {'role': 'assistant', 'content': assistant_ack}
     ]
 
     for msg in query.history[-6:]:
         messages.append({'role': msg['role'], 'content': msg['content']})
 
-    messages.append({'role': 'user', 'content': question_text})
+    messages.append({'role': 'user', 'content': final_user_prompt})
 
-    print(f" [Clinical Brain] Dispatching CLINICAL query to LLM (Lang: {getattr(query, 'language', 'en')})...")
+    print(f" [Clinical Brain] Dispatching CLINICAL query to LLM (Lang: {'ms' if is_ms else 'en'})...")
     answer_text = call_llm_api(messages, preferred_model='llama3')
     print(" [Clinical Brain] Generation complete.")
     return {"answer": answer_text.strip()}
