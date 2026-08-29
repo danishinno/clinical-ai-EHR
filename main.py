@@ -888,9 +888,9 @@ async def ask_guidelines(query: GuidelineQuery):
         pat_info_str = "No active patient currently selected in this session."
 
     lang_instruction = (
-        "LANGUAGE INSTRUCTION: The clinician has set the consultation language to Bahasa Melayu. "
-        "Provide your medical explanation and advice in clear, professional Bahasa Melayu, "
-        "while keeping standard international medication and anatomical names."
+        "LANGUAGE INSTRUCTION: The clinician has set the consultation language to Malaysian Malay (Bahasa Melayu piawai Malaysia). "
+        "Provide your medical explanation and advice in clear, professional Malaysian Malay as used in Malaysian clinical practice (KKM), "
+        "while keeping standard international medication and anatomical names (e.g. Paracetamol, Metformin, Amoxicillin, BP, PRN)."
         if getattr(query, 'language', 'en') == 'ms' else
         "LANGUAGE INSTRUCTION: Provide your clinical responses in clear, professional English medical terminology."
     )
