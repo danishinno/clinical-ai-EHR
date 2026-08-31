@@ -779,17 +779,6 @@ async function fetchAndRenderHistory() {
 
         // Loop through each patient group to render their dedicated card
         Object.entries(patientGroup).forEach(([patientName, pEncounters]) => {
-            // Summarize all unique doctors who have treated this specific patient
-            const patientDoctors = [];
-            pEncounters.forEach(p => {
-                if (p.doc_first && p.doc_last) {
-                    const name = `Dr. ${p.doc_first} ${p.doc_last}`.trim();
-                    if (name && !patientDoctors.includes(name)) {
-                        patientDoctors.push(name);
-                    }
-                }
-            });
-
             const patientDiv = document.createElement('div');
             patientDiv.style.marginBottom = '1rem';
             patientDiv.style.background = 'rgba(255, 255, 255, 0.05)';
@@ -799,23 +788,19 @@ async function fetchAndRenderHistory() {
 
             const pIdSafe = patientName.replace(/[^a-zA-Z0-9]/g, '_');
             const consContainerId = `cons-container-${pIdSafe}`;
+            const visitLabel = pEncounters.length === 1 ? '1 visit' : `${pEncounters.length} visits`;
 
-            // Patient Card Header (ONLY name and expander button)
+            // Patient Card Header (name and expander button)
             patientDiv.innerHTML = `
                 <div style="padding: 1.2rem; background: rgba(255, 255, 255, 0.03); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.3s;"
                      onclick="togglePatientConsultations('${consContainerId}')">
                     <span style="font-weight: 700; font-size: 1.15rem; color: var(--primary-color); display: flex; align-items: center; gap: 8px;">
                          ${patientName}
                     </span>
-                    <span id="arrow-${consContainerId}" style="font-size: 0.9rem; color: #86868b; transition: transform 0.3s; font-weight: 600;">▼ Expand (${pEncounters.length} visit${pEncounters.length > 1 ? 's' : ''})</span>
+                    <span id="arrow-${consContainerId}" style="font-size: 0.9rem; color: #86868b; transition: transform 0.3s; font-weight: 600;">▼ Expand (${visitLabel})</span>
                 </div>
                 
                 <div id="${consContainerId}" style="display: none; padding: 1.2rem; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.1);">
-                    ${patientDoctors.length > 0 ? `
-                        <div style="margin-bottom: 1rem; padding: 0.6rem 0.8rem; background: rgba(0, 168, 150, 0.15); border-radius: 8px; border: 1px solid rgba(0, 168, 150, 0.2); color: #00a896; font-size: 0.85rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-                             Treating Practitioners: ${patientDoctors.join(', ')}
-                        </div>
-                    ` : ''}
                     <div id="cons-rows-${pIdSafe}" style="display: flex; flex-direction: column; gap: 1rem;">
                         <!-- Consultations list loaded here -->
                     </div>

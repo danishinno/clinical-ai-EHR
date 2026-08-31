@@ -1084,7 +1084,7 @@ async def admin_overview():
 @app.get("/doctor/{doctor_id}/patients")
 async def get_doctor_patients(doctor_id: str):
     print(f"\n -------------------------------------------------------------")
-    print(f" [Doctor Patients API] Fetching secure multi-doctor histories for Doctor ID: {doctor_id}")
+    print(f" [Doctor Patients API] Fetching scoped consultation history for Doctor ID: {doctor_id}")
     print(f" -------------------------------------------------------------")
     try:
         dr_id = int(doctor_id)
@@ -1092,7 +1092,7 @@ async def get_doctor_patients(doctor_id: str):
         print(f" [Doctor Patients API] Bad Doctor ID format requested: '{doctor_id}'")
         raise HTTPException(status_code=400, detail="Invalid Doctor ID format.")
 
-    # Fetch all encounters across all doctors for patients assigned to this doctor or treated by them in the past
+    # Fetch only encounters conducted by this specific doctor
     encounters = query_db(
         """SELECT e.id as encounter_id, p.patient_name, e.doc_id, e.structured_notes_json, e.created_at,
                   e.additional_notes, e.is_finalized,
@@ -1100,13 +1100,9 @@ async def get_doctor_patients(doctor_id: str):
            FROM encounters e 
            JOIN patients p ON e.patient_id = p.id 
            JOIN users u ON e.doctor_id = u.id
-           WHERE p.id IN (
-               SELECT id FROM patients WHERE doctor_id = ? AND queue_status = 'on_hold'
-               UNION
-               SELECT patient_id FROM encounters WHERE doctor_id = ?
-           )
+           WHERE e.doctor_id = ?
            ORDER BY e.created_at DESC""",
-        (dr_id, dr_id)
+        (dr_id,)
     )
     print(f" [Doctor Patients API] Returned {len(encounters)} encounters successfully.")
     return {"patients": encounters}
@@ -1461,16 +1457,16 @@ async def get_patient_history(patient_id: str, doctor_id: Optional[str] = None):
             detail="Access Denied: You do not have active consultation assignment or historical relationship for this patient's records."
         )
     
-    # Retrieve all historic encounters across all doctors
+    # Retrieve historic encounters conducted by this requesting doctor for this patient
     encounters = query_db("""
         SELECT e.id as encounter_id, e.structured_notes_json, e.created_at, e.transcript, e.doc_id,
                e.additional_notes, e.is_finalized,
                u.first_name as doc_first, u.last_name as doc_last
         FROM encounters e
         JOIN users u ON e.doctor_id = u.id
-        WHERE e.patient_id = ?
+        WHERE e.patient_id = ? AND e.doctor_id = ?
         ORDER BY e.created_at DESC
-    """, (pat_id,))
+    """, (pat_id, dr_id))
     
     print(f" [Patient History API] Returned {len(encounters)} encounters successfully.")
     return {"encounters": encounters}
