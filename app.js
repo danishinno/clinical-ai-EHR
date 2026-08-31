@@ -72,6 +72,22 @@ let speechRecognition = null;
 startBtn.addEventListener('click', async () => {
     if (isRecording) return;
 
+    if (!currentPatientId) {
+        const langSelect = document.getElementById('language-select');
+        const isMs = langSelect && langSelect.value === 'ms';
+        const msg = isMs
+            ? "Peringatan Keselamatan: Sila pilih pesakit dari Senarai Giliran terlebih dahulu sebelum memulakan sesi konsultasi."
+            : "Verification Required: Please select a patient from the Queue Sidebar first before starting a consultation.";
+        
+        alert(msg);
+        
+        const queueSidebar = document.getElementById('queue-sidebar');
+        if (queueSidebar && queueSidebar.classList.contains('hidden')) {
+            queueSidebar.classList.remove('hidden');
+        }
+        return;
+    }
+
     const langSelect = document.getElementById('language-select');
     const selectedLang = langSelect ? langSelect.value : 'en';
 

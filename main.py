@@ -412,10 +412,21 @@ async def process_dictation(query: ClinicalQuery):
     print(f" [Dictation Scribe] Processing transcript (Lang: {query.language}) for Doctor ID: {query.doctor_id} | Active Patient ID: {query.patient_id}")
     print(f" -------------------------------------------------------------")
     
-    # Check if a pre-assigned patient is active
-    active_patient = None
-    if query.patient_id:
-        active_patient = query_db("SELECT * FROM patients WHERE id = ?", (query.patient_id,), one=True)
+    # Enforce patient queue verification check
+    if not query.patient_id:
+        print(" [Dictation Scribe] Rejected: No active patient in queue selected.")
+        raise HTTPException(
+            status_code=400,
+            detail="Verification Required: A patient must be selected from the queue before starting or processing a consultation."
+        )
+
+    active_patient = query_db("SELECT * FROM patients WHERE id = ?", (query.patient_id,), one=True)
+    if not active_patient:
+        print(f" [Dictation Scribe] Rejected: Patient ID {query.patient_id} not found in database.")
+        raise HTTPException(
+            status_code=404,
+            detail="Verification Error: The selected patient does not exist in the records."
+        )
     
     system_prompt = """
     You are an expert clinical scribe. Read the transcript between a doctor and patient.
