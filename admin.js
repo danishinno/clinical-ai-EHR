@@ -1092,12 +1092,19 @@ window.openEmailMcModal = function(certId) {
 };
 
 window.submitEmailMc = async function() {
-    const certId = parseInt(document.getElementById('email-mc-cert-id').value);
-    const recipient = document.getElementById('email-mc-recipient').value.trim();
-    const subject = document.getElementById('email-mc-subject').value.trim();
-    const customMsg = document.getElementById('email-mc-custom-msg').value.trim();
+    const certIdInput = document.getElementById('email-mc-cert-id');
+    const recipientInput = document.getElementById('email-mc-recipient');
+    const subjectInput = document.getElementById('email-mc-subject');
+    const customMsgInput = document.getElementById('email-mc-custom-msg');
     const submitBtn = document.getElementById('submit-email-mc-btn');
     const statusMsg = document.getElementById('email-mc-status-msg');
+
+    if (!certIdInput || !recipientInput || !submitBtn) return;
+
+    const certId = parseInt(certIdInput.value);
+    const recipient = recipientInput.value.trim();
+    const subject = subjectInput ? subjectInput.value.trim() : '';
+    const customMsg = customMsgInput ? customMsgInput.value.trim() : '';
 
     if (!recipient || !recipient.includes('@')) {
         alert("Please enter a valid recipient email address.");
@@ -1111,7 +1118,11 @@ window.submitEmailMc = async function() {
     }
 
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span>⏳ Generating PDF & Sending…</span>';
+    submitBtn.innerHTML = '<span>⏳ Preparing PDF & Sending…</span>';
+    if (statusMsg) {
+        statusMsg.style.display = 'none';
+        statusMsg.textContent = '';
+    }
 
     try {
         let pdfBase64 = null;
@@ -1119,6 +1130,11 @@ window.submitEmailMc = async function() {
         // Generate PDF Base64 string from html_content using html2pdf
         if (typeof html2pdf !== 'undefined' && cert.html_content) {
             const tempWrapper = document.createElement('div');
+            tempWrapper.style.position = 'absolute';
+            tempWrapper.style.left = '-9999px';
+            tempWrapper.style.top = '-9999px';
+            tempWrapper.style.width = '680px';
+            tempWrapper.style.background = '#ffffff';
             tempWrapper.innerHTML = cert.html_content;
             document.body.appendChild(tempWrapper);
 
@@ -1130,10 +1146,23 @@ window.submitEmailMc = async function() {
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            const pdfUri = await html2pdf().set(opt).from(tempWrapper).outputPdf('datauristring');
-            document.body.removeChild(tempWrapper);
-            if (pdfUri && pdfUri.includes(',')) {
-                pdfBase64 = pdfUri.split(',')[1];
+            try {
+                const pdfWorker = html2pdf().set(opt).from(tempWrapper);
+                let pdfUri = null;
+                try {
+                    pdfUri = await pdfWorker.output('datauristring');
+                } catch (e1) {
+                    pdfUri = await pdfWorker.toPdf().get('pdf').then(pdf => pdf.output('datauristring'));
+                }
+                if (pdfUri && pdfUri.includes(',')) {
+                    pdfBase64 = pdfUri.split(',')[1];
+                }
+            } catch (convErr) {
+                console.warn("Could not generate PDF base64 client-side:", convErr);
+            } finally {
+                if (document.body.contains(tempWrapper)) {
+                    document.body.removeChild(tempWrapper);
+                }
             }
         }
 
@@ -1154,10 +1183,10 @@ window.submitEmailMc = async function() {
         if (response.ok && data.success) {
             if (statusMsg) {
                 statusMsg.style.display = 'block';
-                statusMsg.style.background = 'rgba(48, 209, 88, 0.15)';
-                statusMsg.style.border = '1px solid rgba(48, 209, 88, 0.3)';
-                statusMsg.style.color = '#30d158';
-                statusMsg.innerHTML = `✅ <strong>Success:</strong> ${data.message}`;
+                statusMsg.style.background = data.is_simulation ? 'rgba(255, 159, 10, 0.15)' : 'rgba(48, 209, 88, 0.15)';
+                statusMsg.style.border = data.is_simulation ? '1px solid rgba(255, 159, 10, 0.3)' : '1px solid rgba(48, 209, 88, 0.3)';
+                statusMsg.style.color = data.is_simulation ? '#ff9f0a' : '#30d158';
+                statusMsg.innerHTML = `✅ <strong>${data.message}</strong>`;
             }
 
             setTimeout(() => {
@@ -1165,8 +1194,10 @@ window.submitEmailMc = async function() {
                 if (modal) modal.classList.add('hidden');
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<span>📧 Send Email (PDF)</span>';
-                window.loadMcRecords();
-            }, 1400);
+                if (typeof window.loadMcRecords === 'function') {
+                    window.loadMcRecords();
+                }
+            }, 1800);
 
         } else {
             throw new Error(data.detail || data.message || 'Failed to dispatch email.');

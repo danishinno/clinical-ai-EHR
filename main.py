@@ -1139,9 +1139,17 @@ Tel: +60 3-2142 8888 | Email: contact@healthsync.my
         commit=True
     )
 
+    is_live = bool(smtp_host and smtp_user and smtp_pass)
+    msg_text = (
+        f"Medical Certificate ({serial_no}) PDF successfully delivered to {query.recipient_email}!"
+        if is_live else
+        f"Simulated Dispatch: MC ({serial_no}) logged as emailed to {query.recipient_email}. (To deliver to actual inboxes, configure SMTP in .env)"
+    )
+
     return {
         "success": True,
-        "message": f"Medical Certificate ({serial_no}) PDF successfully dispatched to {query.recipient_email}.",
+        "message": msg_text,
+        "is_simulation": not is_live,
         "delivery_mode": delivery_note,
         "emailed_at": now_iso,
         "recipient": query.recipient_email
