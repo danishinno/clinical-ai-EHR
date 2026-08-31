@@ -74,9 +74,20 @@ def init_db():
             days_issued INTEGER,
             issued_at TEXT,
             html_content TEXT,
+            email_sent_to TEXT,
+            emailed_at TEXT,
             FOREIGN KEY(encounter_id) REFERENCES encounters(id),
             FOREIGN KEY(doctor_id) REFERENCES users(id)
         )''')
+
+    try:
+        cursor.execute("ALTER TABLE medical_certificates ADD COLUMN email_sent_to TEXT")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE medical_certificates ADD COLUMN emailed_at TEXT")
+    except Exception:
+        pass
 
     # 6. Create Patients Cache table (Offline sync fallback for Hybrid Cloud Architecture)
     cursor.execute('''

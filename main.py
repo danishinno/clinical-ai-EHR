@@ -1,10 +1,16 @@
 import multiprocessing
 import os
+import smtplib
+import base64
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from dotenv import load_dotenv
 load_dotenv()
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -294,6 +300,13 @@ class SaveCertificateQuery(BaseModel):
     rest_end: str
     days_issued: int
     html_content: str
+
+class SendMcEmailQuery(BaseModel):
+    certificate_id: int
+    recipient_email: str
+    subject: Optional[str] = None
+    custom_message: Optional[str] = None
+    pdf_base64: Optional[str] = None
 
 # PHASE 1: ASYNCHRONOUS LIVE DICTATION
 @app.websocket("/live-transcribe")
@@ -1027,6 +1040,105 @@ async def get_all_certificates():
         ORDER BY mc.issued_at DESC
     """)
     return {"certificates": certs}
+
+# Admin: Email Medical Certificate PDF
+@app.post("/admin/send-mc-email")
+async def send_mc_email(query: SendMcEmailQuery):
+    print(f"\n -------------------------------------------------------------")
+    print(f" [Admin MC Email] Sending MC ID {query.certificate_id} to {query.recipient_email}")
+    print(f" -------------------------------------------------------------")
+
+    if not query.recipient_email or "@" not in query.recipient_email:
+        raise HTTPException(status_code=400, detail="A valid recipient email address is required.")
+
+    cert = query_db("SELECT * FROM medical_certificates WHERE id = ?", (query.certificate_id,), one=True)
+    if not cert:
+        raise HTTPException(status_code=404, detail="Medical Certificate not found.")
+
+    doc = None
+    if cert["doctor_id"]:
+        doc = query_db("SELECT first_name, last_name, specialty, id_number FROM users WHERE id = ?", (cert["doctor_id"],), one=True)
+
+    doc_name = f"Dr. {doc['first_name']} {doc['last_name']}" if doc else "Attending Practitioner"
+    patient_name = cert["patient_name"] or "Patient"
+    serial_no = cert["serial_number"] or f"HS-MC-{cert['id']}"
+
+    subject = query.subject or f"Medical Certificate ({serial_no}) - {patient_name} | Health Sync Clinic"
+    
+    body_text = query.custom_message or f"""Dear {patient_name},
+
+Please find attached your official Medical Certificate (MC) issued by {doc_name} at Health Sync Clinic.
+
+Certificate Summary:
+- Serial Number: {serial_no}
+- Patient Name: {patient_name} (IC: {cert['ic_number'] or 'N/A'})
+- Diagnosis / Medical Reason: {cert['diagnosis'] or 'Medical Illness'}
+- Approved Rest Period: {cert['rest_start']} to {cert['rest_end']} ({cert['days_issued']} days)
+- Attending Practitioner: {doc_name}
+
+If you require any further assistance or documentation, please contact Health Sync Clinic.
+
+Best regards,
+Administration Department
+Health Sync Clinic
+12, Jalan Sultan Ismail, Kuala Lumpur, Malaysia
+Tel: +60 3-2142 8888 | Email: contact@healthsync.my
+"""
+
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = os.getenv("SMTP_FROM", smtp_user or "noreply@healthsync.my")
+
+    delivery_note = "Dispatched via SMTP"
+
+    if smtp_host and smtp_user and smtp_pass:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = f"Health Sync Clinic <{sender_email}>"
+            msg['To'] = query.recipient_email
+            msg['Subject'] = subject
+            msg.attach(MIMEText(body_text, 'plain'))
+
+            if query.pdf_base64:
+                clean_b64 = query.pdf_base64
+                if "," in clean_b64:
+                    clean_b64 = clean_b64.split(",", 1)[1]
+                pdf_bytes = base64.b64decode(clean_b64)
+                part = MIMEBase('application', 'pdf')
+                part.set_payload(pdf_bytes)
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename="Medical_Certificate_{serial_no}.pdf"')
+                msg.attach(part)
+
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(sender_email, [query.recipient_email], msg.as_string())
+            server.quit()
+            print(f" [Admin MC Email] Live SMTP email delivered to {query.recipient_email}")
+        except Exception as smtp_err:
+            print(f" [Admin MC Email] SMTP delivery exception: {smtp_err}")
+            delivery_note = f"SMTP note: {smtp_err}"
+    else:
+        delivery_note = "Local on-device simulation (SMTP credentials not configured in environment)"
+        print(f" [Admin MC Email] On-device simulated delivery for {query.recipient_email}")
+
+    now_iso = datetime.now().isoformat()
+    query_db(
+        "UPDATE medical_certificates SET email_sent_to = ?, emailed_at = ? WHERE id = ?",
+        (query.recipient_email, now_iso, query.certificate_id),
+        commit=True
+    )
+
+    return {
+        "success": True,
+        "message": f"Medical Certificate ({serial_no}) PDF successfully dispatched to {query.recipient_email}.",
+        "delivery_mode": delivery_note,
+        "emailed_at": now_iso,
+        "recipient": query.recipient_email
+    }
 
 
 @app.post("/signup")

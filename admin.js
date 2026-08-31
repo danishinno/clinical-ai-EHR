@@ -928,7 +928,7 @@ window.loadMcRecords = async function() {
                     <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Rest Period</th>
                     <th style="padding:10px 12px;text-align:center;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Days</th>
                     <th style="padding:10px 12px;text-align:left;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Issued At</th>
-                    <th style="padding:10px 12px;text-align:center;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Action</th>
+                    <th style="padding:10px 12px;text-align:center;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;">Actions</th>
                 </tr>
             </thead>
             <tbody id="mc-records-tbody"></tbody>
@@ -950,23 +950,39 @@ window.loadMcRecords = async function() {
             const startFmt = c.rest_start ? new Date(c.rest_start).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
             const endFmt   = c.rest_end   ? new Date(c.rest_end).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 
+            const emailedBadge = c.email_sent_to ? `
+                <div style="font-size:11px; color:#30d158; display:flex; align-items:center; gap:4px; margin-top:4px;" title="Emailed at ${c.emailed_at || ''}">
+                    <span>✓ Emailed:</span> <span style="color:var(--text-muted);">${c.email_sent_to}</span>
+                </div>
+            ` : '';
+
             const row = document.createElement('tr');
-            row.style.cssText = `border-bottom:1px solid var(--border-color);transition:background 0.15s;cursor:pointer;${i % 2 === 0 ? '' : 'background:rgba(255,255,255,0.02);'}`;
+            row.style.cssText = `border-bottom:1px solid var(--border-color);transition:background 0.15s;${i % 2 === 0 ? '' : 'background:rgba(255,255,255,0.02);'}`;
             row.onmouseenter = () => row.style.background = 'rgba(0, 122, 255, 0.06)';
             row.onmouseleave = () => row.style.background = i % 2 === 0 ? '' : 'rgba(255,255,255,0.02)';
 
             row.innerHTML = `
-                <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:var(--primary-color);">${c.serial_number || '—'}</td>
+                <td style="padding:10px 12px;font-family:monospace;font-size:12px;color:var(--primary-color);">
+                    ${c.serial_number || '—'}
+                    ${emailedBadge}
+                </td>
                 <td style="padding:10px 12px;font-weight:600;color:var(--text-main);">${c.patient_name || '—'}<br><span style="font-size:11px;color:var(--text-muted);font-weight:400;">${c.ic_number || ''}</span></td>
                 <td style="padding:10px 12px;color:var(--text-main);">${docName}</td>
-                <td style="padding:10px 12px;color:var(--text-muted);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.diagnosis || ''}">${c.diagnosis || '—'}</td>
+                <td style="padding:10px 12px;color:var(--text-muted);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${c.diagnosis || ''}">${c.diagnosis || '—'}</td>
                 <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${startFmt} → ${endFmt}</td>
                 <td style="padding:10px 12px;text-align:center;font-weight:700;color:var(--text-main);">${c.days_issued ?? '—'}</td>
                 <td style="padding:10px 12px;color:var(--text-muted);font-size:12px;">${issuedAt}</td>
                 <td style="padding:10px 12px;text-align:center;">
-                    <button onclick="previewMc(${c.id})" style="padding:5px 14px;border-radius:20px;border:1px solid var(--primary-color);background:transparent;color:var(--primary-color);font-size:12px;font-weight:600;cursor:pointer;">
-                        View
-                    </button>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:6px;">
+                        <button onclick="previewMc(${c.id})" title="Preview Medical Certificate"
+                                style="padding:5px 10px; border-radius:14px; border:1px solid var(--primary-color); background:transparent; color:var(--primary-color); font-size:11.5px; font-weight:600; cursor:pointer;">
+                            View
+                        </button>
+                        <button onclick="openEmailMcModal(${c.id})" title="Send PDF via Email"
+                                style="padding:5px 12px; border-radius:14px; border:none; background:#007aff; color:#fff; font-size:11.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                            ✉️ Email
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(row);
@@ -987,18 +1003,208 @@ window.previewMc = function(certId) {
 
     const modal = document.getElementById('mc-preview-modal');
     const content = document.getElementById('mc-preview-content');
+    const emailBtn = document.getElementById('modal-email-mc-btn');
+    const downloadBtn = document.getElementById('modal-download-mc-btn');
     if (!modal || !content) return;
 
     content.innerHTML = cert.html_content || '<p>No preview available.</p>';
+
+    if (emailBtn) {
+        emailBtn.onclick = () => {
+            modal.classList.add('hidden');
+            window.openEmailMcModal(certId);
+        };
+    }
+
+    if (downloadBtn) {
+        downloadBtn.onclick = () => {
+            window.downloadMcPdf(certId);
+        };
+    }
+
     modal.classList.remove('hidden');
 };
 
-// Close MC preview modal
+window.downloadMcPdf = function(certId) {
+    const cert = (window._mcRecords || []).find(c => c.id === certId);
+    if (!cert) return;
+
+    const tempWrapper = document.createElement('div');
+    tempWrapper.innerHTML = cert.html_content;
+    document.body.appendChild(tempWrapper);
+
+    const filename = `Medical_Certificate_${cert.serial_number || cert.id}.pdf`;
+    const opt = {
+        margin: [10, 10, 10, 10],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    if (typeof html2pdf !== 'undefined') {
+        html2pdf().set(opt).from(tempWrapper).save().then(() => {
+            document.body.removeChild(tempWrapper);
+        });
+    } else {
+        alert("PDF generator library not loaded.");
+        document.body.removeChild(tempWrapper);
+    }
+};
+
+window.openEmailMcModal = function(certId) {
+    const cert = (window._mcRecords || []).find(c => c.id === certId);
+    if (!cert) return;
+
+    const emailModal = document.getElementById('email-mc-modal');
+    const certIdInput = document.getElementById('email-mc-cert-id');
+    const patientNameEl = document.getElementById('email-mc-patient-name');
+    const serialEl = document.getElementById('email-mc-serial');
+    const periodEl = document.getElementById('email-mc-period');
+    const recipientInput = document.getElementById('email-mc-recipient');
+    const subjectInput = document.getElementById('email-mc-subject');
+    const customMsgInput = document.getElementById('email-mc-custom-msg');
+    const statusMsg = document.getElementById('email-mc-status-msg');
+
+    if (!emailModal) return;
+
+    const serialNo = cert.serial_number || `HS-MC-${cert.id}`;
+    const pName = cert.patient_name || 'Patient';
+    const startFmt = cert.rest_start ? new Date(cert.rest_start).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+    const endFmt   = cert.rest_end   ? new Date(cert.rest_end).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+    certIdInput.value = cert.id;
+    patientNameEl.textContent = pName + (cert.ic_number ? ` (IC: ${cert.ic_number})` : '');
+    serialEl.textContent = serialNo;
+    periodEl.textContent = `${startFmt} → ${endFmt} (${cert.days_issued || 1} day${cert.days_issued > 1 ? 's' : ''})`;
+
+    recipientInput.value = cert.email_sent_to || '';
+    subjectInput.value = `Official Medical Certificate (${serialNo}) - ${pName} | Health Sync Clinic`;
+    customMsgInput.value = '';
+
+    if (statusMsg) {
+        statusMsg.style.display = 'none';
+        statusMsg.textContent = '';
+    }
+
+    emailModal.classList.remove('hidden');
+    recipientInput.focus();
+};
+
+window.submitEmailMc = async function() {
+    const certId = parseInt(document.getElementById('email-mc-cert-id').value);
+    const recipient = document.getElementById('email-mc-recipient').value.trim();
+    const subject = document.getElementById('email-mc-subject').value.trim();
+    const customMsg = document.getElementById('email-mc-custom-msg').value.trim();
+    const submitBtn = document.getElementById('submit-email-mc-btn');
+    const statusMsg = document.getElementById('email-mc-status-msg');
+
+    if (!recipient || !recipient.includes('@')) {
+        alert("Please enter a valid recipient email address.");
+        return;
+    }
+
+    const cert = (window._mcRecords || []).find(c => c.id === certId);
+    if (!cert) {
+        alert("Certificate record not found.");
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span>⏳ Generating PDF & Sending…</span>';
+
+    try {
+        let pdfBase64 = null;
+
+        // Generate PDF Base64 string from html_content using html2pdf
+        if (typeof html2pdf !== 'undefined' && cert.html_content) {
+            const tempWrapper = document.createElement('div');
+            tempWrapper.innerHTML = cert.html_content;
+            document.body.appendChild(tempWrapper);
+
+            const opt = {
+                margin: [10, 10, 10, 10],
+                filename: `MC_${cert.serial_number || cert.id}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            const pdfUri = await html2pdf().set(opt).from(tempWrapper).outputPdf('datauristring');
+            document.body.removeChild(tempWrapper);
+            if (pdfUri && pdfUri.includes(',')) {
+                pdfBase64 = pdfUri.split(',')[1];
+            }
+        }
+
+        const response = await fetch(`${window.API_BASE_URL}/admin/send-mc-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                certificate_id: certId,
+                recipient_email: recipient,
+                subject: subject,
+                custom_message: customMsg,
+                pdf_base64: pdfBase64
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            if (statusMsg) {
+                statusMsg.style.display = 'block';
+                statusMsg.style.background = 'rgba(48, 209, 88, 0.15)';
+                statusMsg.style.border = '1px solid rgba(48, 209, 88, 0.3)';
+                statusMsg.style.color = '#30d158';
+                statusMsg.innerHTML = `✅ <strong>Success:</strong> ${data.message}`;
+            }
+
+            setTimeout(() => {
+                const modal = document.getElementById('email-mc-modal');
+                if (modal) modal.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>📧 Send Email (PDF)</span>';
+                window.loadMcRecords();
+            }, 1400);
+
+        } else {
+            throw new Error(data.detail || data.message || 'Failed to dispatch email.');
+        }
+
+    } catch (err) {
+        console.error("Email MC error:", err);
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.style.background = 'rgba(255, 69, 58, 0.15)';
+            statusMsg.style.border = '1px solid rgba(255, 69, 58, 0.3)';
+            statusMsg.style.color = '#ff453a';
+            statusMsg.innerHTML = `⚠️ <strong>Error:</strong> ${err.message}`;
+        }
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>📧 Send Email (PDF)</span>';
+    }
+};
+
+// Close MC preview & email modals
 document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('close-mc-preview');
     const modal = document.getElementById('mc-preview-modal');
     if (closeBtn && modal) {
         closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+    }
+
+    const closeEmailBtn = document.getElementById('close-email-mc-modal');
+    const cancelEmailBtn = document.getElementById('cancel-email-mc-btn');
+    const emailModal = document.getElementById('email-mc-modal');
+    if (closeEmailBtn && emailModal) {
+        closeEmailBtn.addEventListener('click', () => emailModal.classList.add('hidden'));
+    }
+    if (cancelEmailBtn && emailModal) {
+        cancelEmailBtn.addEventListener('click', () => emailModal.classList.add('hidden'));
+    }
+    if (emailModal) {
+        emailModal.addEventListener('click', (e) => { if (e.target === emailModal) emailModal.classList.add('hidden'); });
     }
 });

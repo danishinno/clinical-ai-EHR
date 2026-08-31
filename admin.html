@@ -926,9 +926,87 @@
         <div class="modal-box" style="max-width:760px; width:95%; max-height:90vh; overflow-y:auto; background:#fff; border-radius:16px; padding:0;">
           <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 24px; border-bottom:1px solid #e2e8f0;">
             <h3 style="margin:0; color:#1a365d; font-size:1rem;">Medical Certificate Preview</h3>
-            <button id="close-mc-preview" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;">&times;</button>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <button id="modal-download-mc-btn" style="padding:6px 14px; border-radius:8px; border:1px solid #cbd5e0; background:#f7fafc; color:#2d3748; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:5px;">
+                ⬇️ Download PDF
+              </button>
+              <button id="modal-email-mc-btn" style="padding:6px 14px; border-radius:8px; border:none; background:#007aff; color:#fff; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:5px;">
+                ✉️ Send via Email
+              </button>
+              <button id="close-mc-preview" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:#718096;margin-left:5px;">&times;</button>
+            </div>
           </div>
           <div id="mc-preview-content" style="padding:24px;"></div>
+        </div>
+      </div>
+
+      <!-- MC Email Dispatch Modal -->
+      <div id="email-mc-modal" class="modal-overlay hidden" style="z-index:1000;">
+        <div class="modal-box" style="max-width:560px; width:92%; background:#1c1c1e; color:#fff; border:1px solid rgba(255,255,255,0.12); border-radius:16px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.6);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:1.4rem;">✉️</span>
+              <div>
+                <h3 style="margin:0; font-size:1.1rem; font-weight:700; color:#fff;">Email Medical Certificate (PDF)</h3>
+                <p style="margin:2px 0 0 0; font-size:12px; color:#8e8e93;">Dispatch official PDF certificate to patient or employer</p>
+              </div>
+            </div>
+            <button id="close-email-mc-modal" style="background:none; border:none; color:#8e8e93; font-size:1.4rem; cursor:pointer;">&times;</button>
+          </div>
+
+          <!-- MC Meta Summary Box -->
+          <div id="email-mc-summary" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; margin-bottom:16px; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span style="color:#8e8e93;">Patient:</span>
+              <strong id="email-mc-patient-name" style="color:#fff;">—</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <span style="color:#8e8e93;">Serial Number:</span>
+              <span id="email-mc-serial" style="font-family:monospace; color:#30d158; font-weight:600;">—</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:#8e8e93;">Rest Period:</span>
+              <span id="email-mc-period" style="color:#e5e5ea;">—</span>
+            </div>
+          </div>
+
+          <form id="email-mc-form" onsubmit="event.preventDefault(); window.submitEmailMc();" style="display:flex; flex-direction:column; gap:14px;">
+            <input type="hidden" id="email-mc-cert-id" value="">
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:#e5e5ea;">Recipient Email Address <span style="color:#ff453a;">*</span></label>
+              <input type="email" id="email-mc-recipient" required placeholder="e.g. patient@gmail.com or hr@company.com"
+                     style="width:100%; box-sizing:border-box; padding:10px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+            </div>
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:#e5e5ea;">Email Subject</label>
+              <input type="text" id="email-mc-subject" required
+                     style="width:100%; box-sizing:border-box; padding:10px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+            </div>
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:#e5e5ea;">Cover Message Note (Optional)</label>
+              <textarea id="email-mc-custom-msg" rows="3" placeholder="Add custom notes or instructions..."
+                        style="width:100%; box-sizing:border-box; padding:10px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none; resize:vertical;"></textarea>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(0,122,255,0.1); border:1px solid rgba(0,122,255,0.2); border-radius:8px; font-size:11.5px; color:#64d2ff;">
+              <span>📎</span>
+              <span><strong>Attached:</strong> Official Medical Certificate PDF (Generated directly from clinic record)</span>
+            </div>
+
+            <div id="email-mc-status-msg" style="display:none; font-size:12px; padding:8px 12px; border-radius:6px;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+              <button type="button" id="cancel-email-mc-btn" style="padding:9px 16px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#8e8e93; font-size:13px; font-weight:600; cursor:pointer;">
+                Cancel
+              </button>
+              <button type="submit" id="submit-email-mc-btn" style="padding:9px 20px; border-radius:8px; border:none; background:#007aff; color:#fff; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                <span>📧 Send Email (PDF)</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
