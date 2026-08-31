@@ -92,25 +92,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 def call_llm_api(messages, preferred_model="llama3", json_format=False) -> str:
-    # 1. Check Cloud API Key (for Render Cloud deployment)
-    groq_api_key = os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if groq_api_key:
-        try:
-            # pyrefly: ignore [missing-import]
-            from openai import OpenAI
-            base_url = "https://api.groq.com/openai/v1" if os.getenv("GROQ_API_KEY") else None
-            client = OpenAI(api_key=groq_api_key, base_url=base_url)
-            model_name = "llama-3.3-70b-versatile" if os.getenv("GROQ_API_KEY") else "gpt-4o-mini"
-            kwargs = {"model": model_name, "messages": messages}
-            if json_format:
-                kwargs["response_format"] = {"type": "json_object"}
-            res = client.chat.completions.create(**kwargs)
-            if res.choices and res.choices[0].message.content:
-                return res.choices[0].message.content
-        except Exception as cloud_err:
-            print(f" [Clinical Brain] Cloud API Error: {cloud_err}")
-
-    # 2. Check Local Ollama Installed Tags
+    # 1. On-Device Local Ollama Model Matching & Execution
     if HAS_OLLAMA and ollama is not None:
         installed_models = []
         try:
@@ -146,20 +128,19 @@ def call_llm_api(messages, preferred_model="llama3", json_format=False) -> str:
                 if res and "message" in res and "content" in res["message"]:
                     return res["message"]["content"]
             except Exception as oe:
-                print(f" [Clinical Brain] Ollama execution error on {matched_model}: {oe}")
+                print(f" [Clinical Brain] Local Ollama execution error on {matched_model}: {oe}")
 
-    # 3. Safe Fallback Response if AI is offline
+    # 2. Safe Fallback Response if Local AI is offline
     if json_format:
         return json.dumps({
             "name": None, "age": None, "ic_number": None,
-            "subjective": "AI service offline. Please start local Ollama or set GROQ_API_KEY.",
+            "subjective": "Local AI engine offline. Please start Ollama on this device (ollama serve).",
             "objective": None, "assessment": None, "plan": None
         })
     
     return (
         "Clinical Brain is currently offline or unreachable. "
-        "Please ensure Ollama is running locally on your Mac (`ollama serve`) "
-        "or set `GROQ_API_KEY` in environment variables for cloud deployment."
+        "Please ensure Ollama is running locally on your device (`ollama serve`)."
     )
 
 
