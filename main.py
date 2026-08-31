@@ -1085,10 +1085,10 @@ Health Sync Clinic
 Tel: +60 3-2142 8888 | Email: contact@healthsync.my
 """
 
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
+    smtp_host = os.getenv("SMTP_HOST") or ("smtp.gmail.com" if (smtp_user and "@gmail.com" in smtp_user.lower()) else None)
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
     sender_email = os.getenv("SMTP_FROM", smtp_user or "noreply@healthsync.my")
 
     delivery_note = "Dispatched via SMTP"
@@ -1112,15 +1112,22 @@ Tel: +60 3-2142 8888 | Email: contact@healthsync.my
                 part.add_header('Content-Disposition', f'attachment; filename="Medical_Certificate_{serial_no}.pdf"')
                 msg.attach(part)
 
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-            server.starttls()
+            if smtp_port == 465:
+                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12)
+            else:
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
+                server.starttls()
+
             server.login(smtp_user, smtp_pass)
             server.sendmail(sender_email, [query.recipient_email], msg.as_string())
             server.quit()
-            print(f" [Admin MC Email] Live SMTP email delivered to {query.recipient_email}")
+            print(f" [Admin MC Email] Live SMTP email successfully delivered to {query.recipient_email}")
         except Exception as smtp_err:
             print(f" [Admin MC Email] SMTP delivery exception: {smtp_err}")
-            delivery_note = f"SMTP note: {smtp_err}"
+            raise HTTPException(
+                status_code=500,
+                detail=f"SMTP Delivery Failed: {smtp_err}. Please check your SMTP credentials in .env"
+            )
     else:
         delivery_note = "Local on-device simulation (SMTP credentials not configured in environment)"
         print(f" [Admin MC Email] On-device simulated delivery for {query.recipient_email}")
