@@ -1148,7 +1148,7 @@ if (downloadMcBtn) {
                     </tr>
                     <tr>
                         <td style="padding: 8px 12px; color: #4a5568; font-weight: 600;">Identification:</td>
-                        <td style="padding: 8px 12px; border-bottom: 1px solid #cbd5e0; color: #1e1e1e; font-family: 'DM Serif Display', serif;">${notes.ic_number || 'Patient Identity Verified'}</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid #cbd5e0; color: #1e1e1e; font-family: 'DM Serif Display', serif;">${(notes.ic_number && String(notes.ic_number).trim() && !['none','null','patient identity verified','n/a'].includes(String(notes.ic_number).trim().toLowerCase())) ? String(notes.ic_number).trim() : '-'}</td>
                     </tr>
                 </table>
 

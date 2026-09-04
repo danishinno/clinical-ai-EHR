@@ -908,18 +908,109 @@
 
       <!-- ══ SECTION: MC Records ══ -->
       <section class="admin-section-page" id="section-mc-records">
-        <div class="section-header">
+        <div class="section-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
           <div>
             <h1 class="page-title">MC Records</h1>
-            <p class="page-sub">All medical certificates issued by doctors. Click any row to preview.</p>
+            <p class="page-sub">All medical certificates issued by doctors. Click any row to preview or dispatch via SMTP.</p>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div id="smtp-status-indicator" style="display:flex; align-items:center; gap:8px; padding:6px 14px; border-radius:20px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); font-size:12px;">
+              <span id="smtp-status-dot" style="width:8px; height:8px; border-radius:50%; background:#8e8e93; display:inline-block;"></span>
+              <span id="smtp-status-text" style="color:var(--text-muted, #8e8e93); font-weight:500;">Checking SMTP…</span>
+            </div>
+            <button id="open-smtp-config-btn" onclick="window.openSmtpModal()" style="padding:7px 14px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,122,255,0.12); color:#64d2ff; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
+              ⚙️ Configure SMTP
+            </button>
           </div>
         </div>
+
+        <!-- SMTP Quick Alert Banner -->
+        <div id="smtp-alert-banner" style="display:none; margin-bottom:16px; padding:12px 16px; border-radius:10px; font-size:12.5px; line-height:1.5;"></div>
+
         <div class="white-panel">
           <div id="mc-records-container">
             <p class="placeholder-text">Loading MC records…</p>
           </div>
         </div>
       </section>
+
+      <!-- SMTP Server Settings Modal -->
+      <div id="smtp-config-modal" class="modal-overlay hidden" style="z-index:1050;">
+        <div class="modal-box" style="max-width:540px; width:92%; background:#1c1c1e; color:#fff; border:1px solid rgba(255,255,255,0.15); border-radius:16px; padding:24px; box-shadow:0 24px 48px rgba(0,0,0,0.7);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:1.4rem;">⚙️</span>
+              <div>
+                <h3 style="margin:0; font-size:1.15rem; font-weight:700; color:#fff;">SMTP Email Server Settings</h3>
+                <p style="margin:2px 0 0 0; font-size:12px; color:#8e8e93;">Configure outgoing credentials to send live MC emails to patients & employers</p>
+              </div>
+            </div>
+            <button id="close-smtp-modal" onclick="window.closeSmtpModal()" style="background:none; border:none; color:#8e8e93; font-size:1.4rem; cursor:pointer;">&times;</button>
+          </div>
+
+          <div style="background:rgba(0,122,255,0.08); border:1px solid rgba(0,122,255,0.2); border-radius:10px; padding:12px 14px; margin-bottom:16px; font-size:12px; color:#98d0f5; line-height:1.5;">
+            <strong>💡 Gmail Setup:</strong> Use <code>smtp.gmail.com</code> (Port 587) with your Gmail address and a <strong>16-character Google App Password</strong> (generate at <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:#64d2ff; text-decoration:underline;">Google App Passwords</a>).
+          </div>
+
+          <form id="smtp-config-form" onsubmit="event.preventDefault(); window.saveSmtpConfig();" style="display:flex; flex-direction:column; gap:12px;">
+            <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+              <div>
+                <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color:#e5e5ea;">SMTP Host <span style="color:#ff453a;">*</span></label>
+                <input type="text" id="cfg-smtp-host" required placeholder="smtp.gmail.com"
+                       style="width:100%; box-sizing:border-box; padding:9px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+              </div>
+              <div>
+                <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color:#e5e5ea;">Port <span style="color:#ff453a;">*</span></label>
+                <input type="number" id="cfg-smtp-port" required placeholder="587"
+                       style="width:100%; box-sizing:border-box; padding:9px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+              </div>
+            </div>
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color:#e5e5ea;">SMTP Username / Clinic Email <span style="color:#ff453a;">*</span></label>
+              <input type="email" id="cfg-smtp-user" required placeholder="clinic@gmail.com"
+                     style="width:100%; box-sizing:border-box; padding:9px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+            </div>
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color:#e5e5ea;">
+                SMTP Password / App Password <span id="cfg-pass-hint" style="color:#8e8e93; font-weight:400;">(leave empty to keep existing)</span>
+              </label>
+              <input type="password" id="cfg-smtp-pass" placeholder="Enter 16-character App Password"
+                     style="width:100%; box-sizing:border-box; padding:9px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+            </div>
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:5px; color:#e5e5ea;">Sender Display Email (From)</label>
+              <input type="email" id="cfg-smtp-from" placeholder="clinic@healthsync.my or your email"
+                     style="width:100%; box-sizing:border-box; padding:9px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+            </div>
+
+            <!-- Test Connection Section -->
+            <div style="background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; margin-top:4px;">
+              <label style="display:block; font-size:11.5px; font-weight:600; margin-bottom:6px; color:#e5e5ea;">Send Test Email To:</label>
+              <div style="display:flex; gap:8px;">
+                <input type="email" id="cfg-test-recipient" placeholder="your_email@gmail.com"
+                       style="flex:1; padding:7px 10px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#fff; font-size:12px; outline:none;">
+                <button type="button" id="btn-test-smtp" onclick="window.runSmtpTest()" style="padding:7px 14px; border-radius:6px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.1); color:#fff; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">
+                  🧪 Send Test
+                </button>
+              </div>
+            </div>
+
+            <div id="smtp-modal-status-msg" style="display:none; font-size:12px; padding:8px 12px; border-radius:6px; margin-top:2px;"></div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:8px;">
+              <button type="button" onclick="window.closeSmtpModal()" style="padding:9px 16px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#8e8e93; font-size:13px; font-weight:600; cursor:pointer;">
+                Cancel
+              </button>
+              <button type="submit" id="btn-save-smtp" style="padding:9px 20px; border-radius:8px; border:none; background:#30d158; color:#000; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                💾 Save SMTP Settings
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
 
       <!-- MC Preview Modal -->
       <div id="mc-preview-modal" class="modal-overlay hidden" style="z-index:999;">
@@ -954,6 +1045,12 @@
             <button id="close-email-mc-modal" style="background:none; border:none; color:#8e8e93; font-size:1.4rem; cursor:pointer;">&times;</button>
           </div>
 
+          <!-- SMTP Status Pill in Modal -->
+          <div id="email-mc-smtp-mode-pill" style="margin-bottom:12px; padding:6px 12px; border-radius:8px; font-size:11.5px; display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05);">
+            <span id="email-mc-mode-text">Checking SMTP status…</span>
+            <a href="javascript:void(0)" onclick="window.openSmtpModal()" style="color:#64d2ff; text-decoration:none; font-weight:600;">Configure ⚙️</a>
+          </div>
+
           <!-- MC Meta Summary Box -->
           <div id="email-mc-summary" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; margin-bottom:16px; font-size:12px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -976,6 +1073,12 @@
             <div>
               <label style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:#e5e5ea;">Recipient Email Address <span style="color:#ff453a;">*</span></label>
               <input type="email" id="email-mc-recipient" required placeholder="e.g. patient@gmail.com or hr@company.com"
+                     style="width:100%; box-sizing:border-box; padding:10px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
+            </div>
+
+            <div>
+              <label style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:#e5e5ea;">CC Email Address (Optional)</label>
+              <input type="email" id="email-mc-cc" placeholder="e.g. clinic_copy@healthsync.my or hr@company.com"
                      style="width:100%; box-sizing:border-box; padding:10px 12px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#fff; font-size:13px; outline:none;">
             </div>
 

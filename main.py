@@ -304,9 +304,25 @@ class SaveCertificateQuery(BaseModel):
 class SendMcEmailQuery(BaseModel):
     certificate_id: int
     recipient_email: str
+    cc_email: Optional[str] = None
     subject: Optional[str] = None
     custom_message: Optional[str] = None
     pdf_base64: Optional[str] = None
+
+class SmtpConfigQuery(BaseModel):
+    smtp_host: str
+    smtp_port: int
+    smtp_user: str
+    smtp_pass: Optional[str] = None
+    smtp_from: Optional[str] = None
+
+class TestSmtpQuery(BaseModel):
+    test_recipient: str
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_user: Optional[str] = None
+    smtp_pass: Optional[str] = None
+    smtp_from: Optional[str] = None
 
 # PHASE 1: ASYNCHRONOUS LIVE DICTATION
 @app.websocket("/live-transcribe")
@@ -1041,6 +1057,283 @@ async def get_all_certificates():
     """)
     return {"certificates": certs}
 
+def save_smtp_to_env(host: str, port: int, user: str, password: Optional[str], from_email: Optional[str]):
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    env_vars = {}
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line_clean = line.strip()
+                if line_clean and not line_clean.startswith("#") and "=" in line_clean:
+                    k, v = line_clean.split("=", 1)
+                    env_vars[k.strip()] = v.strip()
+
+    env_vars["SMTP_HOST"] = str(host).strip()
+    env_vars["SMTP_PORT"] = str(port).strip()
+    env_vars["SMTP_USER"] = str(user).strip()
+    if password is not None and password != "":
+        env_vars["SMTP_PASS"] = str(password).strip()
+    env_vars["SMTP_FROM"] = str(from_email).strip() if from_email else str(user).strip()
+
+    for k, v in env_vars.items():
+        os.environ[k] = v
+
+    lines = [
+        "# Email SMTP Configuration (Health Sync Clinical EHR)",
+        "# Generated automatically from Admin Settings or manual setup",
+        f"SMTP_HOST={env_vars.get('SMTP_HOST', 'smtp.gmail.com')}",
+        f"SMTP_PORT={env_vars.get('SMTP_PORT', '587')}",
+        f"SMTP_USER={env_vars.get('SMTP_USER', '')}",
+        f"SMTP_PASS={env_vars.get('SMTP_PASS', '')}",
+        f"SMTP_FROM={env_vars.get('SMTP_FROM', '')}",
+        ""
+    ]
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+# Admin: Fetch SMTP Status
+@app.get("/admin/smtp-status")
+async def get_smtp_status():
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASS", "").strip()
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com").strip()
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    sender_email = os.getenv("SMTP_FROM", smtp_user or "noreply@healthsync.my").strip()
+    is_configured = bool(smtp_user and smtp_pass and smtp_host)
+
+    return {
+        "success": True,
+        "configured": is_configured,
+        "smtp_host": smtp_host,
+        "smtp_port": smtp_port,
+        "smtp_user": smtp_user,
+        "smtp_from": sender_email,
+        "has_password": bool(smtp_pass)
+    }
+
+# Admin: Update SMTP Settings
+@app.post("/admin/smtp-config")
+async def update_smtp_config(config: SmtpConfigQuery):
+    current_pass = os.getenv("SMTP_PASS", "").strip()
+    new_pass = config.smtp_pass.strip() if (config.smtp_pass and config.smtp_pass.strip()) else current_pass
+
+    save_smtp_to_env(
+        host=config.smtp_host,
+        port=config.smtp_port,
+        user=config.smtp_user,
+        password=new_pass,
+        from_email=config.smtp_from or config.smtp_user
+    )
+
+    is_configured = bool(config.smtp_user and new_pass and config.smtp_host)
+    return {
+        "success": True,
+        "message": "SMTP configuration successfully updated and saved to .env!",
+        "configured": is_configured,
+        "smtp_host": config.smtp_host,
+        "smtp_port": config.smtp_port,
+        "smtp_user": config.smtp_user,
+        "smtp_from": config.smtp_from or config.smtp_user,
+        "has_password": bool(new_pass)
+    }
+
+# Admin: Test SMTP Connection & Send Verification Email
+@app.post("/admin/test-smtp")
+async def test_smtp_connection(query: TestSmtpQuery):
+    if not query.test_recipient or "@" not in query.test_recipient:
+        raise HTTPException(status_code=400, detail="A valid recipient email address is required for the test.")
+
+    smtp_user = (query.smtp_user or os.getenv("SMTP_USER", "")).strip()
+    smtp_pass = (query.smtp_pass or os.getenv("SMTP_PASS", "")).strip()
+    smtp_host = (query.smtp_host or os.getenv("SMTP_HOST") or "smtp.gmail.com").strip()
+    smtp_port = query.smtp_port or int(os.getenv("SMTP_PORT", "587"))
+    sender_email = (query.smtp_from or os.getenv("SMTP_FROM", smtp_user or "noreply@healthsync.my")).strip()
+
+    if not smtp_host or not smtp_user or not smtp_pass:
+        raise HTTPException(
+            status_code=400,
+            detail="Incomplete SMTP credentials. Please supply Host, Port, Username/Email, and App Password."
+        )
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"Health Sync Clinic <{sender_email}>"
+        msg['To'] = query.test_recipient
+        msg['Subject'] = "✅ Health Sync Clinic: Live SMTP Outgoing Test Successful"
+
+        body = f"""Dear Administrator,
+
+This is a confirmation test from Health Sync Clinical EHR.
+
+Your SMTP outgoing email service is properly configured and authenticated!
+
+Configuration Details:
+• SMTP Host: {smtp_host}
+• SMTP Port: {smtp_port}
+• Authenticated Account: {smtp_user}
+• Sender Address: {sender_email}
+• Verified Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+Medical Certificates (MCs) can now be reliably dispatched directly to patient and employer inboxes.
+
+Best regards,
+Health Sync Clinic System
+12, Jalan Sultan Ismail, Kuala Lumpur, Malaysia
+"""
+        msg.attach(MIMEText(body, 'plain'))
+
+        if smtp_port == 465:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12)
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
+            server.starttls()
+
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(sender_email, [query.test_recipient], msg.as_string())
+        server.quit()
+
+        return {
+            "success": True,
+            "message": f"Test email dispatched successfully to {query.test_recipient} via {smtp_host}:{smtp_port}!"
+        }
+    except Exception as err:
+        print(f" [Admin Test SMTP] Exception: {err}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"SMTP Connection / Authentication Failed: {err}. If using Gmail, make sure you generated a 16-character App Password (not your normal Google account password)."
+        )
+
+def generate_mc_pdf_bytes(cert: dict, doc: Optional[dict] = None) -> bytes:
+    import io, os
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    buffer = io.BytesIO()
+    doc_pdf = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=45,
+        leftMargin=45,
+        topMargin=45,
+        bottomMargin=45
+    )
+
+    title_style = ParagraphStyle('ClinicTitle', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.HexColor('#1a365d'))
+    mc_hdr_style = ParagraphStyle('McHeader', fontName='Helvetica-Bold', fontSize=14, leading=18, textColor=colors.HexColor('#2b6cb0'), alignment=2)
+    serial_style = ParagraphStyle('McSerial', fontName='Helvetica', fontSize=9, leading=12, textColor=colors.HexColor('#718096'), alignment=2)
+    body_style = ParagraphStyle('BodyText', fontName='Helvetica', fontSize=10.5, leading=17, textColor=colors.HexColor('#2d3748'))
+    legal_style = ParagraphStyle('LegalNotice', fontName='Helvetica-Oblique', fontSize=8, leading=11, textColor=colors.HexColor('#a0aec0'))
+    sig_name_style = ParagraphStyle('SigName', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.HexColor('#1a365d'))
+    sig_cursive_style = ParagraphStyle('SigCursive', fontName='Times-BoldItalic', fontSize=18, leading=20, textColor=colors.HexColor('#2b6cb0'), alignment=1)
+    sig_sub_style = ParagraphStyle('SigSub', fontName='Helvetica', fontSize=8.5, leading=11, textColor=colors.HexColor('#718096'), alignment=1)
+
+    doc_first = doc.get('first_name', '') if doc else ''
+    doc_last = doc.get('last_name', '') if doc else ''
+    doc_name = f"Dr. {doc_first} {doc_last}".strip() if (doc_first or doc_last) else "Attending Practitioner"
+    doc_id_num = doc.get('id_number') or "MMC-VERIFIED" if doc else "MMC-VERIFIED"
+    patient_name = cert.get("patient_name") or "Patient"
+    raw_ic = str(cert.get("ic_number") or "").strip()
+    ic_num = raw_ic if raw_ic and raw_ic.lower() not in ["none", "null", "patient identity verified", "n/a", "undefined"] else "-"
+    serial_no = cert.get("serial_number") or f"HS-MC-{cert.get('id', '001')}"
+    diagnosis = cert.get("diagnosis") or "Medical Illness"
+    rest_start = cert.get("rest_start") or datetime.now().strftime('%Y-%m-%d')
+    rest_end = cert.get("rest_end") or datetime.now().strftime('%Y-%m-%d')
+    days_issued = cert.get("days_issued") or 1
+    issued_at = cert.get("issued_at") or datetime.now().strftime('%Y-%m-%d')
+    issued_date_str = issued_at.split("T")[0] if "T" in issued_at else issued_at[:10]
+
+    # Try to load clinic logo
+    logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(os.path.dirname(__file__), "favicon.png")
+    logo_img = RLImage(logo_path, width=45, height=45) if os.path.exists(logo_path) else Paragraph("🏥", title_style)
+
+    # Top Header layout
+    header_left = [
+        [logo_img, Paragraph('<b>HEALTH SYNC CLINIC</b><br/><font size=8.5 color="#4a5568">12, Jalan Sultan Ismail, Kuala Lumpur, Malaysia<br/>Tel: +60 3-2142 8888 | Email: contact@healthsync.my</font>', title_style)]
+    ]
+    t_left = Table(header_left, colWidths=[55, 250])
+    t_left.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+
+    t_right = Table([
+        [Paragraph('MEDICAL CERTIFICATE', mc_hdr_style)],
+        [Paragraph(f'Serial No: {serial_no}', serial_style)]
+    ], colWidths=[200])
+
+    hdr_table = Table([[t_left, t_right]], colWidths=[305, 200])
+    hdr_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+    ]))
+
+    elements = [hdr_table]
+    elements.append(HRFlowable(width='100%', thickness=2, color=colors.HexColor('#1a365d'), spaceAfter=20, spaceBefore=4))
+
+    # Examination Date
+    elements.append(Paragraph(f'<b>Date of Examination:</b> {issued_date_str}', body_style))
+    elements.append(Spacer(1, 12))
+    elements.append(Paragraph('This is to certify that I have clinically examined the following patient:', body_style))
+    elements.append(Spacer(1, 12))
+
+    # Patient details box
+    p_box_data = [
+        [Paragraph('<b>Patient Name:</b>', ParagraphStyle('PLabel', fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#4a5568'))),
+         Paragraph(f'<b>{patient_name}</b>', ParagraphStyle('PVal', fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#1e1e1e')))],
+        [Paragraph('<b>Identification:</b>', ParagraphStyle('PLabel2', fontName='Helvetica-Bold', fontSize=10, textColor=colors.HexColor('#4a5568'))),
+         Paragraph(str(ic_num), ParagraphStyle('PVal2', fontName='Helvetica', fontSize=10.5, textColor=colors.HexColor('#1e1e1e')))]
+    ]
+    p_table = Table(p_box_data, colWidths=[120, 385])
+    p_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
+        ('LINEBELOW', (0,0), (-1,0), 0.5, colors.HexColor('#cbd5e0')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#cbd5e0')),
+        ('TOPPADDING', (0,0), (-1,-1), 7),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 7),
+        ('LEFTPADDING', (0,0), (-1,-1), 10),
+    ]))
+    elements.append(p_table)
+    elements.append(Spacer(1, 16))
+
+    # Medical assessment & recommendation
+    elements.append(Paragraph(f'In my professional opinion, the patient is diagnosed with <font color="#2d3748"><b>{diagnosis}</b></font> and is deemed medically unfit for duty.', body_style))
+    elements.append(Spacer(1, 14))
+
+    elements.append(Paragraph(f'Accordingly, the patient has been granted sick leave for a period of <font color="#2b6cb0"><b>{days_issued} Day(s)</b></font>, commencing from <b>{rest_start}</b> to <b>{rest_end}</b> (inclusive of both dates).', body_style))
+    elements.append(Spacer(1, 24))
+
+    # Legal disclaimer
+    elements.append(Paragraph('* This document is a formal Medical Certificate generated digitally by Health Sync EHR under the license and registration of the signing medical practitioner. Any unauthorized modification constitutes fraud.', legal_style))
+    elements.append(Spacer(1, 35))
+
+    # Doctor signature panel
+    doc_display_last = doc_last if doc_last else (doc_first if doc_first else "Practitioner")
+    sig_left = [
+        [Paragraph('ISSUED BY:', ParagraphStyle('SigLbl', fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.HexColor('#718096')))],
+        [Paragraph(doc_name, sig_name_style)],
+        [Paragraph(f'MMC Registration No: {doc_id_num}<br/><i>Health Sync EHR Verified Scribe</i>', ParagraphStyle('SigDtl', fontName='Helvetica', fontSize=9, leading=12, textColor=colors.HexColor('#4a5568')))]
+    ]
+    t_sig_left = Table(sig_left, colWidths=[250])
+
+    sig_right = [
+        [Paragraph(f'Dr. {doc_display_last}', sig_cursive_style)],
+        [HRFlowable(width='100%', thickness=1.5, color=colors.HexColor('#4a5568'), spaceAfter=4, spaceBefore=2)],
+        [Paragraph('AUTHORIZED SIGNATURE', sig_sub_style)]
+    ]
+    t_sig_right = Table(sig_right, colWidths=[180])
+
+    sig_table = Table([[t_sig_left, t_sig_right]], colWidths=[290, 215])
+    sig_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ('LINEABOVE', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
+        ('TOPPADDING', (0,0), (-1,-1), 15),
+    ]))
+    elements.append(sig_table)
+
+    doc_pdf.build(elements)
+    return buffer.getvalue()
+
 # Admin: Email Medical Certificate PDF
 @app.post("/admin/send-mc-email")
 async def send_mc_email(query: SendMcEmailQuery):
@@ -1064,14 +1357,17 @@ async def send_mc_email(query: SendMcEmailQuery):
     serial_no = cert["serial_number"] or f"HS-MC-{cert['id']}"
 
     subject = query.subject or f"Medical Certificate ({serial_no}) - {patient_name} | Health Sync Clinic"
-    
+
+    raw_body_ic = str(cert.get('ic_number') or '').strip()
+    body_ic = raw_body_ic if raw_body_ic and raw_body_ic.lower() not in ['none', 'null', 'patient identity verified', 'n/a', 'undefined'] else '-'
+
     body_text = query.custom_message or f"""Dear {patient_name},
 
 Please find attached your official Medical Certificate (MC) issued by {doc_name} at Health Sync Clinic.
 
 Certificate Summary:
 - Serial Number: {serial_no}
-- Patient Name: {patient_name} (IC: {cert['ic_number'] or 'N/A'})
+- Patient Name: {patient_name} (IC: {body_ic})
 - Diagnosis / Medical Reason: {cert['diagnosis'] or 'Medical Illness'}
 - Approved Rest Period: {cert['rest_start']} to {cert['rest_end']} ({cert['days_issued']} days)
 - Attending Practitioner: {doc_name}
@@ -1085,27 +1381,48 @@ Health Sync Clinic
 Tel: +60 3-2142 8888 | Email: contact@healthsync.my
 """
 
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASS")
+    smtp_user = os.getenv("SMTP_USER", "").strip()
+    smtp_pass = os.getenv("SMTP_PASS", "").strip()
     smtp_host = os.getenv("SMTP_HOST") or ("smtp.gmail.com" if (smtp_user and "@gmail.com" in smtp_user.lower()) else None)
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    sender_email = os.getenv("SMTP_FROM", smtp_user or "noreply@healthsync.my")
+    sender_email = os.getenv("SMTP_FROM", smtp_user or "noreply@healthsync.my").strip()
 
     delivery_note = "Dispatched via SMTP"
+    is_live = bool(smtp_host and smtp_user and smtp_pass)
 
-    if smtp_host and smtp_user and smtp_pass:
+    # Generate official Medical Certificate PDF based on system template
+    pdf_bytes = None
+    try:
+        pdf_bytes = generate_mc_pdf_bytes(cert, doc)
+        print(f" [Admin MC Email] Generated official Medical Certificate PDF ({len(pdf_bytes)} bytes) for {serial_no}")
+    except Exception as gen_err:
+        print(f" [Admin MC Email] Backend PDF generation error: {gen_err}")
+        if query.pdf_base64:
+            try:
+                clean_b64 = query.pdf_base64
+                if "," in clean_b64:
+                    clean_b64 = clean_b64.split(",", 1)[1]
+                decoded = base64.b64decode(clean_b64)
+                if len(decoded) > 500:
+                    pdf_bytes = decoded
+            except Exception as b64_err:
+                print(f" [Admin MC Email] Fallback client PDF decode failed: {b64_err}")
+
+    if is_live:
         try:
             msg = MIMEMultipart()
             msg['From'] = f"Health Sync Clinic <{sender_email}>"
             msg['To'] = query.recipient_email
             msg['Subject'] = subject
+
+            recipients = [query.recipient_email]
+            if query.cc_email and "@" in query.cc_email:
+                msg['Cc'] = query.cc_email.strip()
+                recipients.append(query.cc_email.strip())
+
             msg.attach(MIMEText(body_text, 'plain'))
 
-            if query.pdf_base64:
-                clean_b64 = query.pdf_base64
-                if "," in clean_b64:
-                    clean_b64 = clean_b64.split(",", 1)[1]
-                pdf_bytes = base64.b64decode(clean_b64)
+            if pdf_bytes:
                 part = MIMEBase('application', 'pdf')
                 part.set_payload(pdf_bytes)
                 encoders.encode_base64(part)
@@ -1113,20 +1430,20 @@ Tel: +60 3-2142 8888 | Email: contact@healthsync.my
                 msg.attach(part)
 
             if smtp_port == 465:
-                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12)
+                server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
             else:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=12)
+                server = smtplib.SMTP(smtp_host, smtp_port, timeout=30)
                 server.starttls()
 
             server.login(smtp_user, smtp_pass)
-            server.sendmail(sender_email, [query.recipient_email], msg.as_string())
+            server.sendmail(sender_email, recipients, msg.as_string())
             server.quit()
             print(f" [Admin MC Email] Live SMTP email successfully delivered to {query.recipient_email}")
         except Exception as smtp_err:
             print(f" [Admin MC Email] SMTP delivery exception: {smtp_err}")
             raise HTTPException(
                 status_code=500,
-                detail=f"SMTP Delivery Failed: {smtp_err}. Please check your SMTP credentials in .env"
+                detail=f"SMTP Delivery Failed: {smtp_err}. Please verify your SMTP credentials in Admin Settings or .env file."
             )
     else:
         delivery_note = "Local on-device simulation (SMTP credentials not configured in environment)"
@@ -1139,11 +1456,10 @@ Tel: +60 3-2142 8888 | Email: contact@healthsync.my
         commit=True
     )
 
-    is_live = bool(smtp_host and smtp_user and smtp_pass)
     msg_text = (
         f"Medical Certificate ({serial_no}) PDF successfully delivered to {query.recipient_email}!"
         if is_live else
-        f"Simulated Dispatch: MC ({serial_no}) logged as emailed to {query.recipient_email}. (To deliver to actual inboxes, configure SMTP in .env)"
+        f"Simulated Dispatch: MC ({serial_no}) logged as emailed to {query.recipient_email}. (To deliver to actual inboxes, configure SMTP credentials)"
     )
 
     return {

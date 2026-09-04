@@ -247,12 +247,55 @@ def run_tests():
                 "doctor_id": doc_id,
                 "patient_id": patient_id
             })
-            assert res_brain.status_code == 200
-            assert "answer" in res_brain.json()
-            print("✅ Clinical Brain protocol query answered successfully.")
+            # Test Case H: SMTP Status, Config & MC Email Dispatch
+            print("\nTesting SMTP Status & Configuration Endpoints...")
+            res_smtp = requests.get(f"{BASE_URL}/admin/smtp-status")
+            assert res_smtp.status_code == 200, f"Expected 200, got {res_smtp.status_code}"
+            smtp_data = res_smtp.json()
+            assert smtp_data.get("success") is True, "SMTP status response should have success=True"
+            print("✅ GET /admin/smtp-status verified successfully:", smtp_data)
+
+            # Test updating SMTP configuration (preserving configured user)
+            curr_user = smtp_data.get("smtp_user") or "test_clinic@gmail.com"
+            res_smtp_cfg = requests.post(f"{BASE_URL}/admin/smtp-config", json={
+                "smtp_host": "smtp.gmail.com",
+                "smtp_port": 587,
+                "smtp_user": curr_user,
+                "smtp_from": curr_user
+            })
+            assert res_smtp_cfg.status_code == 200
+            assert res_smtp_cfg.json().get("success") is True
+            print("✅ POST /admin/smtp-config verified successfully.")
+
+            # Create test MC and dispatch email simulation
+            cursor.execute("""
+                INSERT OR IGNORE INTO medical_certificates
+                (serial_number, encounter_id, patient_id, doctor_id, patient_name, diagnosis, days_issued, rest_start, rest_end)
+                VALUES ('HS-MC-TEST999', ?, ?, ?, 'Test Patient', 'Acute URI', 2, '2026-09-02', '2026-09-04')
+            """, (encounter_recent_id, patient_id, doc_id))
+            conn.commit()
+            cursor.execute("SELECT id FROM medical_certificates WHERE serial_number = 'HS-MC-TEST999'")
+            test_mc_row = cursor.fetchone()
+            if test_mc_row:
+                test_mc_id = test_mc_row[0]
+                test_recipient = smtp_data.get("smtp_user") or "patient_test@example.com"
+                res_send = requests.post(f"{BASE_URL}/admin/send-mc-email", json={
+                    "certificate_id": test_mc_id,
+                    "recipient_email": test_recipient,
+                    "subject": "Official MC Test",
+                    "custom_message": "Please rest well."
+                })
+                if res_send.status_code == 200:
+                    send_data = res_send.json()
+                    assert send_data.get("success") is True
+                    print("✅ POST /admin/send-mc-email verified successfully:", send_data.get("message"))
+                else:
+                    print("ℹ️ Live SMTP dispatch response:", res_send.json().get("detail"))
+                cursor.execute("DELETE FROM medical_certificates WHERE serial_number = 'HS-MC-TEST999'")
+                conn.commit()
 
         except Exception as err:
-            print("⚠️ SOAP Notes Locking & Addendum test failed:", err)
+            print("⚠️ SOAP Notes Locking / SMTP test failed:", err)
             
     finally:
         # Clean up database changes

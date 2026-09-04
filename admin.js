@@ -901,6 +901,9 @@ window.filterOverview = function(query) {
 
 // ─── MC Records ───────────────────────────────────────────────────────────
 window.loadMcRecords = async function() {
+    if (typeof window.checkSmtpStatus === 'function') {
+        window.checkSmtpStatus();
+    }
     const container = document.getElementById('mc-records-container');
     if (!container) return;
     container.innerHTML = '<p class="placeholder-text">Loading…</p>';
@@ -1052,6 +1055,247 @@ window.downloadMcPdf = function(certId) {
     }
 };
 
+// ─── SMTP Configuration & Status Management ──────────────────────────────────
+window.checkSmtpStatus = async function() {
+    const dot = document.getElementById('smtp-status-dot');
+    const text = document.getElementById('smtp-status-text');
+    const banner = document.getElementById('smtp-alert-banner');
+    const modalPill = document.getElementById('email-mc-mode-text');
+
+    try {
+        const res = await fetch(`${window.API_BASE_URL}/admin/smtp-status`);
+        const data = await res.json();
+        window._smtpConfig = data;
+
+        if (data.configured) {
+            if (dot) dot.style.background = '#30d158';
+            if (text) {
+                text.textContent = `Live SMTP Active (${data.smtp_user || data.smtp_host})`;
+                text.style.color = '#30d158';
+            }
+            if (banner) {
+                banner.style.display = 'none';
+            }
+            if (modalPill) {
+                modalPill.innerHTML = `🟢 <strong>Live SMTP Mode:</strong> Delivery via <code>${data.smtp_host}:${data.smtp_port}</code>`;
+                modalPill.parentElement.style.background = 'rgba(48, 209, 88, 0.1)';
+                modalPill.parentElement.style.border = '1px solid rgba(48, 209, 88, 0.25)';
+                modalPill.parentElement.style.color = '#30d158';
+            }
+        } else {
+            if (dot) dot.style.background = '#ff9f0a';
+            if (text) {
+                text.textContent = 'Simulated Mode (SMTP Not Set)';
+                text.style.color = '#ff9f0a';
+            }
+            if (banner) {
+                banner.style.display = 'flex';
+                banner.style.alignItems = 'center';
+                banner.style.justifyContent = 'space-between';
+                banner.style.background = 'rgba(255, 159, 10, 0.12)';
+                banner.style.border = '1px solid rgba(255, 159, 10, 0.3)';
+                banner.style.color = '#ffd60a';
+                banner.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span>⚠️</span>
+                        <span><strong>SMTP Not Configured:</strong> MC emails are currently dispatched in local simulation mode. Configure your SMTP credentials to send actual PDF emails to patient/employer inboxes.</span>
+                    </div>
+                    <button onclick="window.openSmtpModal()" style="margin-left:12px; padding:5px 12px; border-radius:6px; border:none; background:#ff9f0a; color:#000; font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap;">
+                        Configure Now
+                    </button>
+                `;
+            }
+            if (modalPill) {
+                modalPill.innerHTML = `🟡 <strong>Simulation Mode:</strong> Credentials not set in .env. Emails will be logged locally.`;
+                modalPill.parentElement.style.background = 'rgba(255, 159, 10, 0.1)';
+                modalPill.parentElement.style.border = '1px solid rgba(255, 159, 10, 0.25)';
+                modalPill.parentElement.style.color = '#ff9f0a';
+            }
+        }
+        return data;
+    } catch (err) {
+        console.warn('Could not check SMTP status:', err);
+        if (text) text.textContent = 'SMTP Offline';
+        return null;
+    }
+};
+
+window.openSmtpModal = async function() {
+    const modal = document.getElementById('smtp-config-modal');
+    const hostInput = document.getElementById('cfg-smtp-host');
+    const portInput = document.getElementById('cfg-smtp-port');
+    const userInput = document.getElementById('cfg-smtp-user');
+    const passInput = document.getElementById('cfg-smtp-pass');
+    const fromInput = document.getElementById('cfg-smtp-from');
+    const statusMsg = document.getElementById('smtp-modal-status-msg');
+    const passHint = document.getElementById('cfg-pass-hint');
+
+    if (!modal) return;
+    if (statusMsg) {
+        statusMsg.style.display = 'none';
+        statusMsg.textContent = '';
+    }
+
+    try {
+        const res = await fetch(`${window.API_BASE_URL}/admin/smtp-status`);
+        const data = await res.json();
+
+        if (hostInput) hostInput.value = data.smtp_host || 'smtp.gmail.com';
+        if (portInput) portInput.value = data.smtp_port || 587;
+        if (userInput) userInput.value = data.smtp_user || '';
+        if (fromInput) fromInput.value = data.smtp_from || data.smtp_user || '';
+        if (passInput) passInput.value = '';
+        if (passHint) {
+            passHint.textContent = data.has_password ? '(Password configured — leave empty to keep)' : '(Required for live sending)';
+        }
+    } catch (err) {
+        console.warn("Failed fetching current SMTP config:", err);
+    }
+
+    modal.classList.remove('hidden');
+    if (userInput) userInput.focus();
+};
+
+window.closeSmtpModal = function() {
+    const modal = document.getElementById('smtp-config-modal');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.saveSmtpConfig = async function() {
+    const hostInput = document.getElementById('cfg-smtp-host');
+    const portInput = document.getElementById('cfg-smtp-port');
+    const userInput = document.getElementById('cfg-smtp-user');
+    const passInput = document.getElementById('cfg-smtp-pass');
+    const fromInput = document.getElementById('cfg-smtp-from');
+    const saveBtn = document.getElementById('btn-save-smtp');
+    const statusMsg = document.getElementById('smtp-modal-status-msg');
+
+    if (!hostInput || !userInput) return;
+
+    const payload = {
+        smtp_host: hostInput.value.trim(),
+        smtp_port: parseInt(portInput.value.trim() || '587'),
+        smtp_user: userInput.value.trim(),
+        smtp_pass: passInput ? passInput.value : '',
+        smtp_from: fromInput ? fromInput.value.trim() : ''
+    };
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span>⏳ Saving…</span>';
+    }
+
+    try {
+        const res = await fetch(`${window.API_BASE_URL}/admin/smtp-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            if (statusMsg) {
+                statusMsg.style.display = 'block';
+                statusMsg.style.background = 'rgba(48, 209, 88, 0.15)';
+                statusMsg.style.border = '1px solid rgba(48, 209, 88, 0.3)';
+                statusMsg.style.color = '#30d158';
+                statusMsg.innerHTML = `✅ <strong>${data.message}</strong>`;
+            }
+            await window.checkSmtpStatus();
+            setTimeout(() => {
+                window.closeSmtpModal();
+                if (statusMsg) statusMsg.style.display = 'none';
+            }, 1500);
+        } else {
+            throw new Error(data.detail || data.message || 'Failed saving configuration.');
+        }
+    } catch (err) {
+        if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.style.background = 'rgba(255, 69, 58, 0.15)';
+            statusMsg.style.border = '1px solid rgba(255, 69, 58, 0.3)';
+            statusMsg.style.color = '#ff453a';
+            statusMsg.innerHTML = `⚠️ <strong>Error:</strong> ${err.message}`;
+        }
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '💾 Save SMTP Settings';
+        }
+    }
+};
+
+window.runSmtpTest = async function() {
+    const testRecipientInput = document.getElementById('cfg-test-recipient');
+    const hostInput = document.getElementById('cfg-smtp-host');
+    const portInput = document.getElementById('cfg-smtp-port');
+    const userInput = document.getElementById('cfg-smtp-user');
+    const passInput = document.getElementById('cfg-smtp-pass');
+    const fromInput = document.getElementById('cfg-smtp-from');
+    const testBtn = document.getElementById('btn-test-smtp');
+    const statusMsg = document.getElementById('smtp-modal-status-msg');
+
+    const recipient = testRecipientInput ? testRecipientInput.value.trim() : '';
+    if (!recipient || !recipient.includes('@')) {
+        alert("Please enter a valid recipient email address to send the test message to.");
+        if (testRecipientInput) testRecipientInput.focus();
+        return;
+    }
+
+    const payload = {
+        test_recipient: recipient,
+        smtp_host: hostInput ? hostInput.value.trim() : null,
+        smtp_port: portInput ? parseInt(portInput.value.trim() || '587') : null,
+        smtp_user: userInput ? userInput.value.trim() : null,
+        smtp_pass: passInput && passInput.value ? passInput.value : null,
+        smtp_from: fromInput ? fromInput.value.trim() : null
+    };
+
+    if (testBtn) {
+        testBtn.disabled = true;
+        testBtn.innerHTML = '⏳ Testing…';
+    }
+    if (statusMsg) {
+        statusMsg.style.display = 'block';
+        statusMsg.style.background = 'rgba(0, 122, 255, 0.15)';
+        statusMsg.style.border = '1px solid rgba(0, 122, 255, 0.3)';
+        statusMsg.style.color = '#64d2ff';
+        statusMsg.innerHTML = 'Connecting to SMTP server and verifying authentication…';
+    }
+
+    try {
+        const res = await fetch(`${window.API_BASE_URL}/admin/test-smtp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            if (statusMsg) {
+                statusMsg.style.background = 'rgba(48, 209, 88, 0.15)';
+                statusMsg.style.border = '1px solid rgba(48, 209, 88, 0.3)';
+                statusMsg.style.color = '#30d158';
+                statusMsg.innerHTML = `✅ <strong>Success:</strong> ${data.message}`;
+            }
+        } else {
+            throw new Error(data.detail || data.message || 'SMTP authentication failed.');
+        }
+    } catch (err) {
+        if (statusMsg) {
+            statusMsg.style.background = 'rgba(255, 69, 58, 0.15)';
+            statusMsg.style.border = '1px solid rgba(255, 69, 58, 0.3)';
+            statusMsg.style.color = '#ff453a';
+            statusMsg.innerHTML = `⚠️ <strong>Test Failed:</strong> ${err.message}`;
+        }
+    } finally {
+        if (testBtn) {
+            testBtn.disabled = false;
+            testBtn.innerHTML = '🧪 Send Test';
+        }
+    }
+};
+
 window.openEmailMcModal = function(certId) {
     const cert = (window._mcRecords || []).find(c => c.id === certId);
     if (!cert) return;
@@ -1062,6 +1306,7 @@ window.openEmailMcModal = function(certId) {
     const serialEl = document.getElementById('email-mc-serial');
     const periodEl = document.getElementById('email-mc-period');
     const recipientInput = document.getElementById('email-mc-recipient');
+    const ccInput = document.getElementById('email-mc-cc');
     const subjectInput = document.getElementById('email-mc-subject');
     const customMsgInput = document.getElementById('email-mc-custom-msg');
     const statusMsg = document.getElementById('email-mc-status-msg');
@@ -1079,6 +1324,7 @@ window.openEmailMcModal = function(certId) {
     periodEl.textContent = `${startFmt} → ${endFmt} (${cert.days_issued || 1} day${cert.days_issued > 1 ? 's' : ''})`;
 
     recipientInput.value = cert.email_sent_to || '';
+    if (ccInput) ccInput.value = '';
     subjectInput.value = `Official Medical Certificate (${serialNo}) - ${pName} | Health Sync Clinic`;
     customMsgInput.value = '';
 
@@ -1087,6 +1333,7 @@ window.openEmailMcModal = function(certId) {
         statusMsg.textContent = '';
     }
 
+    window.checkSmtpStatus();
     emailModal.classList.remove('hidden');
     recipientInput.focus();
 };
@@ -1094,6 +1341,7 @@ window.openEmailMcModal = function(certId) {
 window.submitEmailMc = async function() {
     const certIdInput = document.getElementById('email-mc-cert-id');
     const recipientInput = document.getElementById('email-mc-recipient');
+    const ccInput = document.getElementById('email-mc-cc');
     const subjectInput = document.getElementById('email-mc-subject');
     const customMsgInput = document.getElementById('email-mc-custom-msg');
     const submitBtn = document.getElementById('submit-email-mc-btn');
@@ -1103,6 +1351,7 @@ window.submitEmailMc = async function() {
 
     const certId = parseInt(certIdInput.value);
     const recipient = recipientInput.value.trim();
+    const ccEmail = ccInput ? ccInput.value.trim() : null;
     const subject = subjectInput ? subjectInput.value.trim() : '';
     const customMsg = customMsgInput ? customMsgInput.value.trim() : '';
 
@@ -1118,63 +1367,22 @@ window.submitEmailMc = async function() {
     }
 
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span>⏳ Preparing PDF & Sending…</span>';
+    submitBtn.innerHTML = '<span>⏳ Preparing PDF & Dispatching…</span>';
     if (statusMsg) {
         statusMsg.style.display = 'none';
         statusMsg.textContent = '';
     }
 
     try {
-        let pdfBase64 = null;
-
-        // Generate PDF Base64 string from html_content using html2pdf
-        if (typeof html2pdf !== 'undefined' && cert.html_content) {
-            const tempWrapper = document.createElement('div');
-            tempWrapper.style.position = 'absolute';
-            tempWrapper.style.left = '-9999px';
-            tempWrapper.style.top = '-9999px';
-            tempWrapper.style.width = '680px';
-            tempWrapper.style.background = '#ffffff';
-            tempWrapper.innerHTML = cert.html_content;
-            document.body.appendChild(tempWrapper);
-
-            const opt = {
-                margin: [10, 10, 10, 10],
-                filename: `MC_${cert.serial_number || cert.id}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
-            try {
-                const pdfWorker = html2pdf().set(opt).from(tempWrapper);
-                let pdfUri = null;
-                try {
-                    pdfUri = await pdfWorker.output('datauristring');
-                } catch (e1) {
-                    pdfUri = await pdfWorker.toPdf().get('pdf').then(pdf => pdf.output('datauristring'));
-                }
-                if (pdfUri && pdfUri.includes(',')) {
-                    pdfBase64 = pdfUri.split(',')[1];
-                }
-            } catch (convErr) {
-                console.warn("Could not generate PDF base64 client-side:", convErr);
-            } finally {
-                if (document.body.contains(tempWrapper)) {
-                    document.body.removeChild(tempWrapper);
-                }
-            }
-        }
-
         const response = await fetch(`${window.API_BASE_URL}/admin/send-mc-email`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 certificate_id: certId,
                 recipient_email: recipient,
+                cc_email: ccEmail,
                 subject: subject,
-                custom_message: customMsg,
-                pdf_base64: pdfBase64
+                custom_message: customMsg
             })
         });
 
@@ -1238,4 +1446,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (emailModal) {
         emailModal.addEventListener('click', (e) => { if (e.target === emailModal) emailModal.classList.add('hidden'); });
     }
+
+    const smtpModal = document.getElementById('smtp-config-modal');
+    if (smtpModal) {
+        smtpModal.addEventListener('click', (e) => { if (e.target === smtpModal) window.closeSmtpModal(); });
+    }
+
+    // Auto-check SMTP status on load
+    window.checkSmtpStatus();
 });

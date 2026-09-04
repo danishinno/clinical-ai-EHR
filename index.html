@@ -10,15 +10,15 @@
     <script src="config.js"></script>
     <script src="storage.js"></script>
     <script>
-      (function() {
-        const uid = window.AppStorage ? window.AppStorage.getItem('user_id') : null;
-        const role = window.AppStorage ? window.AppStorage.getItem('role') : null;
-        if (!uid) {
-          window.location.replace('login.html');
-        } else if (role === 'admin') {
-          window.location.replace('admin.html');
-        }
-      })();
+        (function () {
+            const uid = window.AppStorage ? window.AppStorage.getItem('user_id') : null;
+            const role = window.AppStorage ? window.AppStorage.getItem('role') : null;
+            if (!uid) {
+                window.location.replace('login.html');
+            } else if (role === 'admin') {
+                window.location.replace('admin.html');
+            }
+        })();
     </script>
     <!-- Marked.js for parsing markdown in AI responses -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -34,13 +34,14 @@
                     style="width: 50px; height: 50px; border-radius: 50%; object-fit: contain; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background-color: transparent;">
                 <div>
                     <h1 style="margin-bottom: 0;">Health Sync</h1>
-                    <p class="subtext" style="margin-top: 0;"><span id="txt-welcome">Welcome</span>, Dr. <span id="dr-name-display"></span></p>
+                    <p class="subtext" style="margin-top: 0;"><span id="txt-welcome">Welcome</span>, Dr. <span
+                            id="dr-name-display"></span></p>
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; position: relative;">
                 <select id="language-select" class="language-select" title="System Language">
-                    <option value="en">🌐 English</option>
-                    <option value="ms">🇲🇾 Bahasa Melayu</option>
+                    <option value="en">English</option>
+                    <option value="ms">Bahasa Melayu</option>
                 </select>
                 <button id="toggle-sidebar-btn" class="btn-toggle-sidebar" type="button">Queue Sidebar</button>
                 <div style="position: relative; display: inline-block;">
@@ -50,8 +51,9 @@
                     <div id="header-dropdown" class="dropdown-content hidden"
                         style="position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 260px; box-shadow: var(--shadow); border-radius: var(--radius-lg); border: 1px solid var(--border-color); z-index: 10;">
 
-                        <button id="menu-profile-btn" onclick="window.location.href='profile.html'" class="dropdown-item"
-                            style="border-bottom: 1px solid var(--border-color);"> Profile Settings</button>
+                        <button id="menu-profile-btn" onclick="window.location.href='profile.html'"
+                            class="dropdown-item" style="border-bottom: 1px solid var(--border-color);"> Profile
+                            Settings</button>
                         <button id="history-btn" class="dropdown-item"
                             style="border-bottom: 1px solid var(--border-color);"> Patient History</button>
                         <button id="report-btn" class="dropdown-item"
@@ -68,10 +70,14 @@
         <!-- Patient Demographics & Safety Banner -->
         <div id="demographics-banner" class="demographics-banner hidden" style="margin-bottom: 1.5rem;">
             <div class="demographics-patient-info">
-                <div class="demographics-item"><span id="lbl-banner-patient">Patient</span>: <strong id="banner-name">--</strong></div>
-                <div class="demographics-item"><span id="lbl-banner-age">Age</span>: <strong id="banner-age">--</strong></div>
-                <div class="demographics-item"><span id="lbl-banner-gender">Gender</span>: <strong id="banner-gender">--</strong></div>
-                <div class="demographics-item"><span id="lbl-banner-id">ID</span>: <strong id="banner-ic">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-patient">Patient</span>: <strong
+                        id="banner-name">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-age">Age</span>: <strong id="banner-age">--</strong>
+                </div>
+                <div class="demographics-item"><span id="lbl-banner-gender">Gender</span>: <strong
+                        id="banner-gender">--</strong></div>
+                <div class="demographics-item"><span id="lbl-banner-id">ID</span>: <strong id="banner-ic">--</strong>
+                </div>
             </div>
         </div>
 
@@ -82,7 +88,8 @@
                     <h2 id="txt-queue-title">Patient Queue</h2>
                 </div>
                 <div style="padding: 1.2rem; overflow-y: auto; flex-grow: 1;">
-                    <p id="txt-patients-on-hold" style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">
+                    <p id="txt-patients-on-hold"
+                        style="margin: 0 0 0.8rem 0; font-weight: 700; font-size: 0.85rem; color: var(--primary-color);">
                         Patients on Hold</p>
                     <div id="sidebar-queue-list">
                         <!-- Loaded dynamically -->
@@ -107,7 +114,8 @@
                             </div>
                         </div>
                         <div class="transcript-area">
-                            <p id="transcript-placeholder" class="placeholder-text">Click "Start" and begin speaking...</p>
+                            <p id="transcript-placeholder" class="placeholder-text">Click "Start" and begin speaking...
+                            </p>
                             <div id="transcript-content"></div>
                         </div>
                     </section>
@@ -182,7 +190,8 @@
                                 <!-- AI Refiner Section -->
                                 <div class="refiner-container"
                                     style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.8rem;">
-                                    <h3 id="txt-refiner-title" style="margin: 0; font-size: 1rem; color: #ffffff;">Add Manual Corrections / Additions</h3>
+                                    <h3 id="txt-refiner-title" style="margin: 0; font-size: 1rem; color: #ffffff;">Add
+                                        Manual Corrections / Additions</h3>
                                     <textarea id="manual-additions-input"
                                         placeholder="Type any additional clinical details or corrections here... (e.g. 'Patient actually has BP 130/85 and add paracetamol for fever')"
                                         style="min-height: 80px; width: 100%; resize: vertical; padding: 0.8rem; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.05); color: var(--text-main); font-family: inherit; font-size: 0.95rem; border: 1px solid var(--border-color);"></textarea>
@@ -196,7 +205,8 @@
 
                                 <div style="margin-top: 1.5rem; text-align: right;">
                                     <button id="save-notes-btn" class="btn btn-primary">
-                                        <span class="icon"></span> <span id="txt-save-consultation">Save Consultation</span>
+                                        <span class="icon"></span> <span id="txt-save-consultation">Save
+                                            Consultation</span>
                                     </button>
                                 </div>
                             </div>
@@ -222,9 +232,11 @@
             </div>
 
             <div class="smart-suggestions">
-                <button class="smart-btn" id="cds-btn-guidelines" data-query="Verify Guidelines">Verify Guidelines</button>
+                <button class="smart-btn" id="cds-btn-guidelines" data-query="Verify Guidelines">Verify
+                    Guidelines</button>
                 <button class="smart-btn" id="cds-btn-history" data-query="Summarize History">Summarize History</button>
-                <button class="smart-btn" id="cds-btn-treatment" data-query="Recommend Treatment">Recommend Treatment</button>
+                <button class="smart-btn" id="cds-btn-treatment" data-query="Recommend Treatment">Recommend
+                    Treatment</button>
             </div>
 
             <div class="chat-area" id="chat-area">
